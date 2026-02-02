@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+
+{% block title %}Person detail{% endblock %}
+
+{% block content %}
+<h1>
+    {{ person.first_name }} {{ person.second_name }} {{ person.family_name }}
+</h1>
+
+<ul class="list-group">
+    <li class="list-group-item">
+        <strong>Date of birth:</strong> {{ person.dob }}
+    </li>
+    <li class="list-group-item">
+        <strong>Gender:</strong> {{ person.get_gender_display }}
+    </li>
+</ul>
+
+<a href="{% url 'persons:index' %}" class="btn btn-secondary mt-3">
+    Back to list
+</a>
+{% endblock %}

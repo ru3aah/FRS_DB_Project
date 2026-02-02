@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+
+{% block title %}Persons list{% endblock %}
+
+{% block content %}
+<h1>Persons</h1>
+
+<table class="table table-striped">
+    <thead>
+        <tr>
+            <th>First name</th>
+            <th>Second name</th>
+            <th>Family name</th>
+            <th>DOB</th>
+            <th>Gender</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for person in persons %}
+        <tr>
+            <td>
+                <a href="{% url 'persons:detail' person.pk %}">
+                    {{ person.first_name }}
+                </a>
+            </td>
+            <td>{{ person.second_name }}</td>
+            <td>{{ person.family_name }}</td>
+            <td>{{ person.dob }}</td>
+            <td>{{ person.get_gender_display }}</td>
+        </tr>
+        {% empty %}
+        <tr>
+            <td colspan="5" class="text-muted text-center">
+                No persons found
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}
