@@ -3,6 +3,7 @@
 # website: https://www.uipath.com/product/studio
 #
 # Recommended: n/a
+.idea
 
 # Ignore folders that could cause issues if accidentally tracked
 **/.local/**
