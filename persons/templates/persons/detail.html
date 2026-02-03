@@ -1,11 +1,16 @@
 {% extends "base.html" %}
 
-{% block title %}Person detail{% endblock %}
+{% block title %}FRS DB | Person detail{% endblock %}
 
 {% block content %}
-<h1>
+    <h1>Person detail</h1>
+    <h6>Created @ {{ person.created_at }} Updated @ {{ person.updated_at }}</h6>
+
+    <h3>Person ID: {{ person.person_id }}</h3>
+
+<h2>
     {{ person.first_name }} {{ person.second_name }} {{ person.family_name }}
-</h1>
+</h2>
 
 <ul class="list-group">
     <li class="list-group-item">

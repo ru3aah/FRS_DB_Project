@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Persons list{% endblock %}
+{% block title %}FRS DB | Persons list{% endblock %}
 
 {% block content %}
 <h1>Persons</h1>
@@ -8,6 +8,8 @@
 <table class="table table-striped">
     <thead>
         <tr>
+            <th> # </th>
+            <th>PID</th>
             <th>First name</th>
             <th>Second name</th>
             <th>Family name</th>
@@ -18,11 +20,13 @@
     <tbody>
         {% for person in persons %}
         <tr>
+            <td>{{ forloop.counter }}. </td>
             <td>
                 <a href="{% url 'persons:detail' person.pk %}">
-                    {{ person.first_name }}
+                    {{ person.pk }}
                 </a>
             </td>
+            <td>{{ person.first_name }}</td>
             <td>{{ person.second_name }}</td>
             <td>{{ person.family_name }}</td>
             <td>{{ person.dob }}</td>
