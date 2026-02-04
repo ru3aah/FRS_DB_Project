@@ -77,11 +77,11 @@ WSGI_APPLICATION = "FireService_DB.wsgi.application"
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
-        "NAME": os.getenv("DB_NAME", "frs_db"),
-        "USER": os.getenv("DB_USER", "frs_user"),
-        "PASSWORD": os.getenv("DB_PASSWORD", "frs_pass"),
-        "HOST": os.getenv("DB_HOST", "127.0.0.1"),
-        "PORT": os.getenv("DB_PORT", "5432"),
+        "NAME": os.getenv("POSTGRES_DB", "frs_db"),
+        "USER": os.getenv("POSTGRES_USER", "frs_user"),
+        "PASSWORD": os.getenv("POSTGRES_PASSWORD", ""),
+        "HOST": os.getenv("POSTGRES_HOST", "db"),
+        "PORT": os.getenv("POSTGRES_PORT", "5432"),
     }
 }
 
@@ -125,3 +125,4 @@ USE_TZ = True
 
 STATIC_URL = "static/"
 STATICFILES_DIRS = [os.path.join(BASE_DIR, "static")]
+STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")

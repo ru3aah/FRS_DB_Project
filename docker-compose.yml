@@ -1,16 +1,63 @@
 services:
   db:
     image: postgres:16
-    container_name: frs_db_pg
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: frs_db
-      POSTGRES_USER: frs_user
-      POSTGRES_PASSWORD: frs_pass
-    ports:
-      - "5432:5432"
+    container_name: frs_db
+    restart: always
+    env_file: .env
     volumes:
-      - frs_db_pgdata:/var/lib/postgresql/data
+      - pg_data:/var/lib/postgresql/data
+    networks:
+      - frs_net
+
+  web:
+    build:
+      context: .
+      dockerfile: Docker/django/Dockerfile
+    container_name: frs_web
+    restart: always
+    env_file: .env
+    command: uv run gunicorn FireService_DB.wsgi:application --bind 0.0.0.0:8000
+    volumes:
+      - static_volume:/app/staticfiles
+    depends_on:
+      - db
+    networks:
+      - frs_net
+
+  nginx:
+    image: nginx:alpine
+    container_name: frs_nginx
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - static_volume:/staticfiles:ro
+      - ./certs:/etc/nginx/certs:ro
+    depends_on:
+      - web
+    networks:
+      - frs_net
+
+  db_backup:
+    image: postgres:16
+    container_name: frs_db_backup
+    restart: always
+    env_file: .env
+    volumes:
+      - ./backups:/backups
+      - ./Docker/backup/backup.sh:/backup.sh:ro
+    entrypoint: ["/bin/bash", "/backup.sh"]
+    depends_on:
+      - db
+    networks:
+      - frs_net
 
 volumes:
-  frs_db_pgdata:
+  pg_data:
+  static_volume:
+
+networks:
+  frs_net:
+    driver: bridge

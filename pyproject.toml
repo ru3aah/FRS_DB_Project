@@ -8,6 +8,7 @@ dependencies = [
     "black>=26.1.0",
     "django-bootstrap5>=26.1",
     "dotenv>=0.9.9",
+    "gunicorn>=25.0.1",
     "psycopg[binary]>=3.3.2",
     "python-dotenv>=1.2.1",
 ]
