@@ -10,3 +10,51 @@ dependencies = [
     "dotenv>=0.9.9",
     "python-dotenv>=1.2.1",
 ]
+
+[dependency-groups]
+dev = [
+    "black>=26.1.0",
+    "isort>=7.0.0",
+    "ruff>=0.14.14",
+]
+
+[tool.black]
+line-length = 88
+target-version = ["py312"]
+skip-string-normalization = false
+
+[tool.isort]
+profile = "black"
+line_length = 88
+combine_as_imports = true
+force_single_line = false
+known_first_party = ["persons", "config"]
+skip = [".venv", "migrations"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+fix = true
+
+select = [
+  "E",  # pycodestyle
+  "F",  # pyflakes
+  "I",  # isort
+  "B",  # bugbear
+  "UP", # pyupgrade
+]
+
+ignore = [
+  "E501",  # handled by Black
+]
+
+exclude = [
+  ".venv",
+  "migrations",
+  "__pycache__",
+]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"
