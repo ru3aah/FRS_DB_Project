@@ -1,12 +1,31 @@
-from django.shortcuts import render, get_object_or_404
+from django.contrib.auth.mixins import LoginRequiredMixin
+from django.urls import reverse_lazy
+from django.views.generic import ListView, DetailView, CreateView, UpdateView
+
 from .models import Person
 
 
-def index(request):
-    persons = Person.objects.all()
-    return render(request, "persons/index.html", {"persons": persons})
+class PersonListView(LoginRequiredMixin, ListView):
+    model = Person
+    template_name = "persons/index.html"
+    context_object_name = "persons"
 
 
-def person_detail(request, pk):
-    person = get_object_or_404(Person, pk=pk)
-    return render(request, "persons/detail.html", {"person": person})
+class PersonDetailView(LoginRequiredMixin, DetailView):
+    model = Person
+    template_name = "persons/detail.html"
+    context_object_name = "person"
+
+
+class PersonCreateView(LoginRequiredMixin, CreateView):
+    model = Person
+    template_name = "persons/form.html"
+    fields = "__all__"
+    success_url = reverse_lazy("persons:index")
+
+
+class PersonUpdateView(LoginRequiredMixin, UpdateView):
+    model = Person
+    template_name = "persons/form.html"
+    fields = "__all__"
+    success_url = reverse_lazy("persons:index")

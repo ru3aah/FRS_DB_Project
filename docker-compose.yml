@@ -1,0 +1,16 @@
+services:
+  db:
+    image: postgres:16
+    container_name: frs_db_pg
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: frs_db
+      POSTGRES_USER: frs_user
+      POSTGRES_PASSWORD: frs_pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - frs_db_pgdata:/var/lib/postgresql/data
+
+volumes:
+  frs_db_pgdata:
