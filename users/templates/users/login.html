@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+
+{% block title %}FRS | Login{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-12 col-md-6 col-lg-4">
+
+    <h1 class="h3 mb-3 text-center">Sign in</h1>
+
+    {% if form.errors %}
+      <div class="alert alert-danger">
+        Invalid username or password.
+      </div>
+    {% endif %}
+
+    <form method="post" class="card card-body shadow-sm">
+      {% csrf_token %}
+
+      <div class="mb-3">
+        <label class="form-label" for="{{ form.username.id_for_label }}">Username</label>
+        {{ form.username }}
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label" for="{{ form.password.id_for_label }}">Password</label>
+        {{ form.password }}
+      </div>
+
+      {% if next %}
+        <input type="hidden" name="next" value="{{ next }}">
+      {% endif %}
+
+      <button type="submit" class="btn btn-primary w-100">Login</button>
+    </form>
+
+  </div>
+</div>
+{% endblock %}
