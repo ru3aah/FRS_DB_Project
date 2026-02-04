@@ -17,10 +17,11 @@ Including another URLconf
 
 from django.contrib import admin
 from django.urls import path, include
-from .views import home
+from .views import home, under_construction
 
 urlpatterns = [
     path("", home, name="home"),
     path("admin/", admin.site.urls),
     path("persons/", include("persons.urls", namespace="persons")),
+    path("under-construction/", under_construction, name="under_construction"),
 ]
