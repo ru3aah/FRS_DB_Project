@@ -43,6 +43,8 @@ INSTALLED_APPS = [
     "companies.apps.CompaniesConfig",
 ]
 
+AUTH_USER_MODEL = "users.CustomUser"
+
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
@@ -126,7 +128,7 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 LOGIN_URL = "users:login"
-LOGIN_REDIRECT_URL = "home"
+LOGIN_REDIRECT_URL = "main"
 LOGOUT_REDIRECT_URL = "home"
 
 # Internationalization
