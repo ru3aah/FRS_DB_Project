@@ -1,38 +1,55 @@
 {% extends "base.html" %}
+{% load static %}
 
-{% block title %}FRS | Login{% endblock %}
+{% block title %}FRS DB | Login{% endblock %}
 
 {% block content %}
 <div class="row justify-content-center">
   <div class="col-12 col-md-6 col-lg-4">
 
-    <h1 class="h3 mb-3 text-center">Login</h1>
+    <div class="text-center mb-3">
+      <img src="{% static 'img/logos/frs_logo.png' %}" alt="FRS" class="img-fluid" style="max-height:120px;">
+    </div>
 
-    {% if form.errors %}
-      <div class="alert alert-danger">
-        Invalid username or password.
+    <div class="card shadow-sm">
+      <div class="card-body p-4">
+        <h4 class="mb-3 text-center">Sign in</h4>
+
+        {% if form.non_field_errors %}
+          <div class="alert alert-danger">
+            {{ form.non_field_errors }}
+          </div>
+        {% endif %}
+
+        <form method="post" novalidate>
+          {% csrf_token %}
+
+          <div class="mb-3">
+            {{ form.username.label_tag }}
+            {{ form.username }}
+            {% if form.username.errors %}
+              <div class="text-danger small">{{ form.username.errors }}</div>
+            {% endif %}
+          </div>
+
+          <div class="mb-3">
+            {{ form.password.label_tag }}
+            {{ form.password }}
+            {% if form.password.errors %}
+              <div class="text-danger small">{{ form.password.errors }}</div>
+            {% endif %}
+          </div>
+
+          <div class="d-grid gap-2">
+            <button class="btn btn-primary" type="submit">Login</button>
+          </div>
+
+          <div class="text-center mt-3">
+            <a href="{% url 'under_construction' %}">Forgot password?</a>
+          </div>
+        </form>
       </div>
-    {% endif %}
-
-    <form method="post" class="card card-body shadow-sm">
-      {% csrf_token %}
-
-      <div class="mb-3">
-        <label class="form-label" for="{{ form.username.id_for_label }}">Username</label>
-        {{ form.username }}
-      </div>
-
-      <div class="mb-3">
-        <label class="form-label" for="{{ form.password.id_for_label }}">Password</label>
-        {{ form.password }}
-      </div>
-
-      {% if next %}
-        <input type="hidden" name="next" value="{{ next }}">
-      {% endif %}
-
-      <button type="submit" class="btn btn-primary w-100">Login</button>
-    </form>
+    </div>
 
   </div>
 </div>
