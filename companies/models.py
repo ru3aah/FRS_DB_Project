@@ -6,6 +6,13 @@ class Company(models.Model):
     id = models.BigAutoField(primary_key=True)
 
     name = models.CharField(max_length=255, unique=True)
+    name_short = models.CharField(max_length=10, unique=True, db_index=True)
+    logo = models.ImageField(
+        blank=True,
+        null=True,
+        upload_to="companies/logos/",
+    )
+
     is_active = models.BooleanField(default=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
