@@ -1,7 +1,10 @@
-#!/bin/bash
+#!/bin/sh
 set -e
 
-uv run python manage.py migrate --noinput
-uv run python manage.py collectstatic --noinput
+# Use venv (in case PATH wasn't applied for some reason)
+export PATH="/app/.venv/bin:$PATH"
+
+python manage.py migrate --noinput
+python manage.py collectstatic --noinput
 
 exec "$@"
