@@ -1,56 +1,64 @@
 {% extends "base.html" %}
-{% load static %}
 
 {% block title %}FRS DB | Login{% endblock %}
 
 {% block content %}
-<div class="row justify-content-center">
-  <div class="col-12 col-md-6 col-lg-4">
-
-    <div class="text-center mb-3">
-      <img src="{% static 'img/logos/frs_logo.png' %}" alt="FRS" class="img-fluid" style="max-height:120px;">
+<div class="container mt-5" style="max-width: 520px;">
+    <div class="text-center mb-4">
+        <img src="/static/img/logos/frs_logo.png" alt="FRS Logo"
+             class="img-fluid" style="max-height: 120px;">
+        <h2 class="mt-3">Login</h2>
     </div>
 
-    <div class="card shadow-sm">
-      <div class="card-body p-4">
-        <h4 class="mb-3 text-center">Login</h4>
+    <form method="post" novalidate>
+        {% csrf_token %}
 
         {% if form.non_field_errors %}
-          <div class="alert alert-danger">
-            {{ form.non_field_errors }}
-          </div>
+            <div class="alert alert-danger">
+                {{ form.non_field_errors }}
+            </div>
         {% endif %}
 
-        <form method="post" novalidate>
-          {% csrf_token %}
-
-          <div class="mb-3">
-            {{ form.username.label_tag }}
+        <div class="mb-3">
+            <label class="form-label"
+                   for="{{ form.username.id_for_label }}">{{ form.username.label }}</label>
             {{ form.username }}
             {% if form.username.errors %}
-              <div class="text-danger small">{{ form.username.errors }}</div>
+                <div class="text-danger small">{{ form.username.errors }}</div>
             {% endif %}
-          </div>
+        </div>
 
-          <div class="mb-3">
-            {{ form.password.label_tag }}
+        <div class="mb-3">
+            <label class="form-label"
+                   for="{{ form.password.id_for_label }}">{{ form.password.label }}</label>
             {{ form.password }}
             {% if form.password.errors %}
-              <div class="text-danger small">{{ form.password.errors }}</div>
+                <div class="text-danger small">{{ form.password.errors }}</div>
             {% endif %}
-          </div>
+        </div>
 
-          <div class="d-grid gap-2">
+        <div class="mb-3">
+            <label class="form-label"
+                   for="{{ form.company.id_for_label }}">{{ form.company.label }}</label>
+            {{ form.company }}
+            {% if form.company.errors %}
+                <div class="text-danger small">{{ form.company.errors }}</div>
+            {% endif %}
+        </div>
+
+        <div class="d-grid gap-2">
             <button class="btn btn-primary" type="submit">Login</button>
-          </div>
-
-          <div class="text-center mt-3">
-            <a href="{% url 'under_construction' %}">Forgot password?</a>
-          </div>
-        </form>
-      </div>
-    </div>
-
-  </div>
+            <a class="btn btn-outline-secondary"
+               href="/under-construction/">Forgot password</a>
+        </div>
+    </form>
 </div>
+
+<script>
+  // Добавим bootstrap-классы всем инпутам/селекту формы
+  document.addEventListener("DOMContentLoaded", () => {
+    const el = document.querySelectorAll("input, select");
+    el.forEach(x => x.classList.add("form-control"));
+  });
+</script>
 {% endblock %}

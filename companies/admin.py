@@ -12,5 +12,6 @@ class CompanyAdmin(admin.ModelAdmin):
 @admin.register(CompanyMembership)
 class CompanyMembershipAdmin(admin.ModelAdmin):
     list_display = ("id", "user", "company", "is_active", "created_at")
-    search_fields = ("user__username", "user__email", "company__name")
+    search_fields = ("user__email", "company__name")
     list_filter = ("company", "is_active")
+    autocomplete_fields = ("user", "company")
