@@ -1,6 +1,7 @@
 from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.db import models
 from django.utils.translation import gettext_lazy as _
+from persons.models import Person
 
 
 class CustomUserManager(BaseUserManager):
@@ -34,12 +35,21 @@ class CustomUserManager(BaseUserManager):
 
 
 class CustomUser(AbstractUser):
-    username = None  # убираем username полностью
+    username = None  # полностью убираем username
 
     email = models.EmailField(_("email address"), unique=True)
 
+    person = models.OneToOneField(
+        Person,
+        on_delete=models.PROTECT,
+        related_name="user",
+        null=True,
+        blank=True,
+        help_text="Each user must be linked to a person",
+    )
+
     USERNAME_FIELD = "email"
-    REQUIRED_FIELDS = []  # никаких обязательных полей кроме email+password
+    REQUIRED_FIELDS = []
 
     objects = CustomUserManager()
 
