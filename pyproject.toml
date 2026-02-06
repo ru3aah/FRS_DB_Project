@@ -12,6 +12,7 @@ dependencies = [
     "gunicorn>=25.0.1",
     "pillow>=12.1.0",
     "psycopg[binary]>=3.3.2",
+    "pycountry>=24.6.1",
     "python-dotenv>=1.2.1",
 ]
 

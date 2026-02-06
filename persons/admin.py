@@ -7,6 +7,7 @@ class PersonIDScanInline(admin.TabularInline):
     """
     Scans/files attached to a specific PersonID.
     """
+
     model = PersonIDScan
     extra = 0
     fields = ("file", "uploaded_at")
@@ -17,6 +18,7 @@ class PersonIDInline(admin.TabularInline):
     """
     Identity documents attached to a Person.
     """
+
     model = PersonID
     extra = 0
 
@@ -44,6 +46,7 @@ class PersonAdmin(admin.ModelAdmin):
     """
     Person admin with inline identity documents.
     """
+
     list_display = (
         "person_id",
         "first_name",
@@ -67,6 +70,7 @@ class PersonIDAdmin(admin.ModelAdmin):
     """
     Separate admin page for documents (handy for auditing).
     """
+
     list_display = (
         "id",
         "person",
@@ -103,6 +107,7 @@ class PersonIDScanAdmin(admin.ModelAdmin):
     """
     Separate admin page for scans/files.
     """
+
     list_display = ("id", "person_id", "uploaded_at", "file")
     list_filter = ("uploaded_at",)
     search_fields = (
@@ -120,6 +125,7 @@ class CountryAdmin(admin.ModelAdmin):
     """
     Country reference table (used for issued_country).
     """
+
     list_display = ("code3", "short_name", "full_name", "is_active")
     list_filter = ("is_active",)
     search_fields = ("code3", "short_name", "full_name")
@@ -131,6 +137,7 @@ class IDTypeAdmin(admin.ModelAdmin):
     """
     ID document types reference table.
     """
+
     list_display = ("code", "name", "is_active")
     list_filter = ("is_active",)
     search_fields = ("code", "name")
