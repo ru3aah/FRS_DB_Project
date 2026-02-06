@@ -21,11 +21,8 @@ class PersonIDInline(admin.TabularInline):
 
     model = PersonID
     extra = 0
-
-    # Use autocomplete to avoid huge dropdowns
     autocomplete_fields = ("id_type", "issued_country")
 
-    # Keep list compact but useful
     fields = (
         "id_type",
         "id_number",
@@ -37,7 +34,6 @@ class PersonIDInline(admin.TabularInline):
         "updated_at",
     )
     readonly_fields = ("created_at", "updated_at")
-
     show_change_link = True
 
 
@@ -54,14 +50,25 @@ class PersonAdmin(admin.ModelAdmin):
         "family_name",
         "dob",
         "gender",
+        "nationality",
         "created_at",
         "updated_at",
     )
     list_display_links = ("person_id", "family_name")
-    search_fields = ("dob", "first_name", "second_name", "family_name", "gender")
-    list_filter = ("gender",)
+    search_fields = (
+        "dob",
+        "first_name",
+        "second_name",
+        "family_name",
+        "gender",
+        "nationality__code3",
+        "nationality__short_name",
+        "nationality__full_name",
+    )
+    list_filter = ("gender", "nationality")
     ordering = ("family_name", "first_name", "dob")
 
+    autocomplete_fields = ("nationality",)
     inlines = (PersonIDInline,)
 
 
@@ -123,7 +130,7 @@ class PersonIDScanAdmin(admin.ModelAdmin):
 @admin.register(Country)
 class CountryAdmin(admin.ModelAdmin):
     """
-    Country reference table (used for issued_country).
+    Country reference table (used for issued_country and nationality).
     """
 
     list_display = ("code3", "short_name", "full_name", "is_active")

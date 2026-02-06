@@ -25,6 +25,15 @@ class Person(models.Model):
         null=False,
     )
 
+    # Nationality (country of citizenship). Optional.
+    nationality = models.ForeignKey(
+        "Country",
+        on_delete=models.PROTECT,
+        related_name="persons_by_nationality",
+        blank=True,
+        null=True,
+    )
+
     # Optional personal photo (stored in MEDIA)
     photo = models.ImageField(
         upload_to="persons/photos/",
@@ -38,11 +47,7 @@ class Person(models.Model):
 
 class Country(models.Model):
     """
-    Reference table for document issuing countries.
-
-    Example records:
-      code3=RUS, short_name=Russia, full_name=Russian Federation
-      code3=USA, short_name=US, full_name=United States of America
+    Reference table for document issuing countries and nationality selection.
     """
 
     id = models.BigAutoField(primary_key=True)
@@ -79,12 +84,6 @@ class Country(models.Model):
 class IDType(models.Model):
     """
     Reference table for identity document types.
-
-    Initial examples:
-      - passport
-      - national_id
-      - residence_permit
-      - social_security_card
     """
 
     id = models.BigAutoField(primary_key=True)
@@ -115,8 +114,7 @@ class IDType(models.Model):
 class PersonID(models.Model):
     """
     Universal identity document model.
-
-    One Person -> many documents (different types and numbers).
+    One Person -> many documents.
     """
 
     id = models.BigAutoField(primary_key=True)
@@ -141,11 +139,7 @@ class PersonID(models.Model):
         null=True,
     )
 
-    issued_on = models.DateField(
-        blank=True,
-        null=True,
-        help_text="Document issue date",
-    )
+    issued_on = models.DateField(blank=True, null=True, help_text="Document issue date")
 
     valid_till = models.DateField(
         blank=True,
@@ -159,7 +153,6 @@ class PersonID(models.Model):
         help_text="Document number (letters and digits allowed)",
     )
 
-    # Machine-readable standard sequence (MRZ or similar, if available)
     id_std_sequence = models.CharField(
         max_length=256,
         blank=True,
@@ -187,7 +180,6 @@ class PersonID(models.Model):
 class PersonIDScan(models.Model):
     """
     Stores files (scans/photos/PDFs) related to a document.
-
     One document -> many files.
     """
 
