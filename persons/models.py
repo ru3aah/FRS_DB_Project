@@ -5,6 +5,7 @@ class Person(models.Model):
     """
     Stores pure personal data, independent from employment or documents.
     """
+
     person_id = models.BigAutoField(primary_key=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
@@ -43,6 +44,7 @@ class Country(models.Model):
       code3=RUS, short_name=Russia, full_name=Russian Federation
       code3=USA, short_name=US, full_name=United States of America
     """
+
     id = models.BigAutoField(primary_key=True)
 
     code3 = models.CharField(
@@ -84,6 +86,7 @@ class IDType(models.Model):
       - residence_permit
       - social_security_card
     """
+
     id = models.BigAutoField(primary_key=True)
 
     code = models.CharField(
@@ -115,6 +118,7 @@ class PersonID(models.Model):
 
     One Person -> many documents (different types and numbers).
     """
+
     id = models.BigAutoField(primary_key=True)
 
     person = models.ForeignKey(
@@ -186,6 +190,7 @@ class PersonIDScan(models.Model):
 
     One document -> many files.
     """
+
     id = models.BigAutoField(primary_key=True)
 
     person_id = models.ForeignKey(
