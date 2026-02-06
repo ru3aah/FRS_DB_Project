@@ -6,8 +6,11 @@ services:
     env_file: .env
     volumes:
       - pg_data:/var/lib/postgresql/data
+      - ./backups:/backups
     networks:
       - frs_net
+    ports:
+      - "5432:5432"
 
   web:
     build:
@@ -16,14 +19,20 @@ services:
     container_name: frs_web
     restart: always
     env_file: .env
+    environment:
+      - IN_DOCKER=1
+      # чтобы Django в контейнере гарантированно выбрал Postgres
+      - POSTGRES_HOST=db
     command: uv run gunicorn FireService_DB.wsgi:application --bind 0.0.0.0:8000
     volumes:
       - static_volume:/app/staticfiles
       - media_volume:/app/media
+      - ./backups:/backups
     depends_on:
       - db
     networks:
       - frs_net
+    # healthcheck убран: curl может отсутствовать в образе
 
   nginx:
     image: nginx:alpine
@@ -41,20 +50,7 @@ services:
       - web
     networks:
       - frs_net
-
-  db_backup:
-    image: postgres:16
-    container_name: frs_db_backup
-    restart: always
-    env_file: .env
-    volumes:
-      - ./backups:/backups
-      - ./Docker/backup/backup.sh:/backup.sh:ro
-    entrypoint: ["/bin/bash", "/backup.sh"]
-    depends_on:
-      - db
-    networks:
-      - frs_net
+    # healthcheck убран: в nginx:alpine обычно нет curl
 
 volumes:
   pg_data:

@@ -1,30 +1,26 @@
 FROM python:3.12-slim
 
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
-
 WORKDIR /app
 
+# Install system dependencies including postgresql-client
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc libpq-dev curl \
-    && rm -rf /var/lib/apt/lists/*
+    gcc \
+    libpq-dev \
+    curl \
+    postgresql-client \
+ && rm -rf /var/lib/apt/lists/*
 
-# Install uv
+# Install uv (Python dependency manager)
 RUN pip install --upgrade pip && pip install uv
 
-# Copy dependency files first (better layer cache)
+# Copy and install Python dependencies
 COPY pyproject.toml uv.lock ./
-
-# Install deps (creates /app/.venv)
 RUN uv sync --frozen
 
-# Use venv binaries by default
-ENV PATH="/app/.venv/bin:$PATH"
-
-# Copy the rest of the project
+# Copy project files
 COPY . .
 
-# Entrypoint
+# Copy entrypoint script
 COPY Docker/django/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
