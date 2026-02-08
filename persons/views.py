@@ -1,10 +1,11 @@
+from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
-from django.urls import reverse_lazy
+from django.urls import reverse, reverse_lazy
 from django.views.generic import ListView, DetailView, CreateView, UpdateView
 
 from companies.models import Company
 from .forms import PersonForm
-from .models import Person
+from .models import Person, PersonID
 
 
 class NavbarContextMixin:
@@ -34,7 +35,7 @@ class HRAccessMixin(LoginRequiredMixin, UserPassesTestMixin):
     """
     Allow access only for:
     - superuser
-    - users with persons.hr_manager permission
+    - staff with persons.hr_manager permission
     """
 
     def test_func(self):
@@ -65,11 +66,42 @@ class PersonCreateView(NavbarContextMixin, HRAccessMixin, CreateView):
     model = Person
     template_name = "persons/form.html"
     form_class = PersonForm
-    success_url = reverse_lazy("persons:index")
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        messages.success(self.request, "Person created and saved.")
+        return response
+
+    def get_success_url(self):
+        # After create, stay on the edit page of the newly created person
+        return reverse("persons:edit", kwargs={"pk": self.object.pk})
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["person_docs"] = []
+        return ctx
 
 
 class PersonUpdateView(NavbarContextMixin, HRAccessMixin, UpdateView):
     model = Person
     template_name = "persons/form.html"
     form_class = PersonForm
-    success_url = reverse_lazy("persons:index")
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        messages.success(self.request, "Changes saved.")
+        return response
+
+    def get_success_url(self):
+        # Stay on the same edit page after save
+        return reverse("persons:edit", kwargs={"pk": self.object.pk})
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        # Documents related to this person
+        ctx["person_docs"] = (
+            PersonID.objects.filter(person=self.object)
+            .select_related("id_type", "issued_country")
+            .order_by("id_type__name", "id_number")
+        )
+        return ctx
