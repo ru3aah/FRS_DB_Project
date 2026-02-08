@@ -34,6 +34,14 @@ class Person(models.Model):
         null=True,
     )
 
+    # NEW: Local / Expat (strictly two values)
+    residency_status = models.CharField(
+        max_length=5,
+        choices=(("EXPAT", "Expat"), ("LOCAL", "Local")),
+        default="LOCAL",
+        db_index=True,
+    )
+
     # Optional personal photo (stored in MEDIA)
     photo = models.ImageField(
         upload_to="persons/photos/",

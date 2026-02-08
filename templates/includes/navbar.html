@@ -4,10 +4,10 @@
   <div class="container-fluid">
 
     <a class="navbar-brand d-flex align-items-center" href="{% url 'main' %}">
-      {# Always show system logo first #}
+      {# System logo — always first #}
       <img src="{% static 'img/logos/frs_logo.png' %}" alt="FRS" height="40" class="me-2">
 
-      {# Then company logo if available #}
+      {# Company logo if available #}
       {% if company and company.logo %}
         <img src="{{ company.logo.url }}" alt="Company logo" height="40" class="me-2">
       {% endif %}
@@ -21,8 +21,13 @@
       </strong>
     </a>
 
-    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNavbar"
-            aria-controls="mainNavbar" aria-expanded="false" aria-label="Toggle navigation">
+    <button class="navbar-toggler"
+            type="button"
+            data-bs-toggle="collapse"
+            data-bs-target="#mainNavbar"
+            aria-controls="mainNavbar"
+            aria-expanded="false"
+            aria-label="Toggle navigation">
       <span class="navbar-toggler-icon"></span>
     </button>
 
@@ -39,10 +44,16 @@
                aria-expanded="false">
               HR
             </a>
+
             <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="hrDropdown">
               <li>
                 <a class="dropdown-item" href="{% url 'persons:index' %}">
                   Persons
+                </a>
+              </li>
+              <li>
+                <a class="dropdown-item" href="{% url 'staff:index' %}">
+                  Staff
                 </a>
               </li>
             </ul>

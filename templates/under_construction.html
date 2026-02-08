@@ -4,11 +4,30 @@
 
 {% block content %}
 <div class="row justify-content-center text-center">
-    <div class="col-md-8">
-        <h1 class="display-5 mt-4">🚧 Under Construction 🚧</h1>
-        <p class="lead mt-3">This section is currently under development.</p>
-        <p class="text-muted">Please check back later.</p>
-        <a href="/" class="btn btn-outline-secondary mt-4">Back to Home</a>
-    </div>
+  <div class="col-md-8">
+
+    <h1 class="display-5 mt-4">🚧 Under Construction 🚧</h1>
+
+    <p class="lead mt-3">
+      This section is currently under development.
+    </p>
+
+    <p class="text-muted">
+      Please check back later.
+    </p>
+
+    {% if request.META.HTTP_REFERER %}
+      <a href="{{ request.META.HTTP_REFERER }}"
+         class="btn btn-outline-secondary mt-4">
+        Back
+      </a>
+    {% else %}
+      <a href="{% url 'main' %}"
+         class="btn btn-outline-secondary mt-4">
+        Back to Home
+      </a>
+    {% endif %}
+
+  </div>
 </div>
 {% endblock %}

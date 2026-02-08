@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+
+{% block title %}FRS DB | Staff{% endblock %}
+
+{% block content %}
+{% include "includes/navbar.html" %}
+
+<div class="container mt-4">
+
+  <div class="mb-3">
+    <h1 class="h4 mb-0">Staff</h1>
+    <div class="text-muted small">
+      HR staff management section
+    </div>
+  </div>
+
+  <div class="row g-3">
+
+    <div class="col-md-3">
+      <a href="{% url 'under_construction' %}"
+         class="card text-decoration-none h-100 shadow-sm">
+        <div class="card-body text-center">
+          <div class="fw-semibold">Positions</div>
+          <div class="text-muted small mt-1">
+            Job positions & roles
+          </div>
+        </div>
+      </a>
+    </div>
+
+    <div class="col-md-3">
+      <a href="{% url 'under_construction' %}"
+         class="card text-decoration-none h-100 shadow-sm">
+        <div class="card-body text-center">
+          <div class="fw-semibold">Staffing plan</div>
+          <div class="text-muted small mt-1">
+            Manpower planning
+          </div>
+        </div>
+      </a>
+    </div>
+
+    <div class="col-md-3">
+      <a href="{% url 'under_construction' %}"
+         class="card text-decoration-none h-100 shadow-sm">
+        <div class="card-body text-center">
+          <div class="fw-semibold">Shifts</div>
+          <div class="text-muted small mt-1">
+            Shift schedules
+          </div>
+        </div>
+      </a>
+    </div>
+
+    <div class="col-md-3">
+      <a href="{% url 'under_construction' %}"
+         class="card text-decoration-none h-100 shadow-sm">
+        <div class="card-body text-center">
+          <div class="fw-semibold">Staff</div>
+          <div class="text-muted small mt-1">
+            Staff members
+          </div>
+        </div>
+      </a>
+    </div>
+
+  </div>
+
+</div>
+{% endblock %}

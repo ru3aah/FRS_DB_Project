@@ -27,7 +27,7 @@
 
       <div class="d-flex gap-2 align-items-center flex-wrap">
 
-        {# Photo buttons (NEW) #}
+        {# Photo buttons #}
         <button type="button" class="btn btn-outline-primary" id="photoPickBtn">
           {% if object and object.photo %}Replace photo{% else %}Add photo{% endif %}
         </button>
@@ -111,11 +111,6 @@
               {{ form.photo }}
             </div>
 
-            {# If Django renders "photo-clear" checkbox for existing images, we keep it hidden and toggle via JS #}
-            <div class="d-none">
-              {# sometimes Django adds clear checkbox outside ModelForm rendering, but we try to find it in JS anyway #}
-            </div>
-
             {% if form.photo.errors %}
               <div class="text-danger small mt-2">{{ form.photo.errors }}</div>
             {% endif %}
@@ -181,6 +176,13 @@
                 <label class="form-label">Nationality</label>
                 {{ form.nationality }}
                 {% if form.nationality.errors %}<div class="text-danger small">{{ form.nationality.errors }}</div>{% endif %}
+              </div>
+
+              {# NEW: Local/Expat under nationality #}
+              <div class="col-12">
+                <label class="form-label">Residency status</label>
+                {{ form.residency_status }}
+                {% if form.residency_status.errors %}<div class="text-danger small">{{ form.residency_status.errors }}</div>{% endif %}
               </div>
 
             </div>

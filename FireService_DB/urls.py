@@ -11,9 +11,8 @@ urlpatterns = [
     path("main/", MainView.as_view(), name="main"),
     path("persons/", include("persons.urls", namespace="persons")),
     path("users/", include("users.urls", namespace="users")),
-    path(
-        "companies/", include("companies.urls", namespace="companies")
-    ),  # ✅ Added this
+    path("companies/", include("companies.urls", namespace="companies")),
+    path("staff/", include("staff.urls", namespace="staff")),
     path(
         "under-construction/",
         UnderConstructionView.as_view(),
