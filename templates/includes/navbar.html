@@ -1,0 +1,65 @@
+<nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+  <div class="container-fluid">
+
+    <a class="navbar-brand d-flex align-items-center" href="{% url 'main' %}">
+      {% if company and company.logo %}
+        <img src="{{ company.logo.url }}" alt="Logo" height="40" class="me-2">
+      {% endif %}
+      <strong>
+        {% if company %}
+          {{ company.name_short|default:company.name }}
+        {% else %}
+          FRS DB
+        {% endif %}
+      </strong>
+    </a>
+
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNavbar"
+            aria-controls="mainNavbar" aria-expanded="false" aria-label="Toggle navigation">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+
+    <div class="collapse navbar-collapse" id="mainNavbar">
+      <ul class="navbar-nav ms-auto align-items-center">
+
+        {% if request.user.is_superuser or perms.persons.hr_manager %}
+          <li class="nav-item dropdown me-3">
+            <a class="nav-link dropdown-toggle text-white"
+               href="#"
+               id="hrDropdown"
+               role="button"
+               data-bs-toggle="dropdown"
+               aria-expanded="false">
+              HR
+            </a>
+            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="hrDropdown">
+              <li>
+                <a class="dropdown-item" href="{% url 'persons:index' %}">
+                  Persons
+                </a>
+              </li>
+            </ul>
+          </li>
+        {% endif %}
+
+        <li class="nav-item text-white me-3">
+          {% if person %}
+            {{ person.first_name }} {{ person.second_name }} {{ person.family_name }}
+          {% else %}
+            {{ request.user.email }}
+          {% endif %}
+        </li>
+
+        <li class="nav-item">
+          <form method="post" action="{% url 'users:logout' %}" class="m-0 p-0">
+            {% csrf_token %}
+            <button class="btn btn-outline-light btn-sm" type="submit">
+              Logout
+            </button>
+          </form>
+        </li>
+
+      </ul>
+    </div>
+  </div>
+</nav>

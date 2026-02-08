@@ -1,4 +1,5 @@
-from django.contrib.auth.mixins import LoginRequiredMixin
+from __future__ import annotations
+
 from django.views.generic import TemplateView
 
 from companies.models import Company
@@ -19,11 +20,15 @@ class MainView(TemplateView):
         ctx = super().get_context_data(**kwargs)
 
         user = self.request.user
-        ctx["person"] = user.person
+
+        # Linked person is optional
+        ctx["person"] = getattr(user, "person", None) if user.is_authenticated else None
 
         company_id = self.request.session.get("active_company_id")
         ctx["company"] = (
-            Company.objects.filter(id=company_id).first() if company_id else None
+            Company.objects.filter(id=company_id, is_active=True).first()
+            if company_id
+            else None
         )
 
         return ctx

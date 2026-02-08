@@ -2,47 +2,7 @@
 
 {% block content %}
 
-<nav class="navbar navbar-expand-lg navbar-dark bg-primary">
-  <div class="container-fluid">
-
-    <!-- Logo + company short name -->
-    <a class="navbar-brand d-flex align-items-center" href="{% url 'main' %}">
-      {% if company and company.logo %}
-        <img src="{{ company.logo.url }}" alt="Logo" height="40" class="me-2">
-      {% endif %}
-      <strong>
-        {% if company %}
-          {{ company.name_short|default:company.name }}
-        {% else %}
-          FRS DB
-        {% endif %}
-      </strong>
-    </a>
-
-    <div class="collapse navbar-collapse">
-      <ul class="navbar-nav ms-auto align-items-center">
-
-        <!-- User (Person) -->
-        <li class="nav-item text-white me-3">
-          {% if person %}
-            {{ person.first_name }} {{ person.second_name }} {{ person.family_name }}
-          {% else %}
-            {{ request.user.email }}
-          {% endif %}
-        </li>
-
-        <!-- Logout via POST -->
-        <li class="nav-item">
-          <form method="post" action="{% url 'users:logout' %}" class="m-0 p-0 d-inline">
-            {% csrf_token %}
-            <button class="btn btn-outline-light btn-sm" type="submit">Logout</button>
-          </form>
-        </li>
-
-      </ul>
-    </div>
-  </div>
-</nav>
+{% include "includes/navbar.html" %}
 
 <div class="container mt-4">
   <h3>Main menu</h3>

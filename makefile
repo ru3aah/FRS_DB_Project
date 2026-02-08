@@ -1,128 +1,59 @@
-# ========= FRS_DB_PROJECT Makefile =========
+.PHONY: help up down build rebuild restart logs migrate makemigrations shell web db collectstatic
 
-# Подгрузить переменные из .env (для make)
-ifneq (,$(wildcard .env))
-	include .env
-	export
-endif
+PROJECT=FRS_DB_Project
+WEB_CONTAINER=frs_web
+DB_CONTAINER=frs_db
 
-# docker compose v2 по умолчанию; при желании можно переопределить:
-# make COMPOSE=docker-compose up
-COMPOSE ?= docker compose
+help:
+	@echo ""
+	@echo "Available commands:"
+	@echo "  make up               Start all containers"
+	@echo "  make down             Stop all containers"
+	@echo "  make restart          Restart all containers"
+	@echo "  make build            Build web image"
+	@echo "  make rebuild          Rebuild web image (no cache)"
+	@echo "  make logs             Show web container logs"
+	@echo "  make migrate          Run Django migrations"
+	@echo "  make makemigrations   Create Django migrations"
+	@echo "  make collectstatic    Collect static files"
+	@echo "  make shell            Django shell inside web"
+	@echo "  make web              Bash inside web container"
+	@echo "  make db               PostgreSQL shell"
+	@echo ""
 
-# Удобный алиас для Django-команд внутри контейнера web (venv через uv)
-DJANGO = $(COMPOSE) exec web uv run python manage.py
-
-.PHONY: up down restart logs build shell migrate createsuperuser collectstatic status prune rebuild restore backup test reset-db dev-cert deploy
-
-# 🔼 Запуск
 up:
-	@echo "Запуск проекта..."
-	$(COMPOSE) up --build -d
+	docker compose up -d
 
-# 🔽 Остановка
 down:
-	@echo "Остановка проекта..."
-	$(COMPOSE) down --remove-orphans
+	docker compose down
 
-# ♻️ Перезапуск
 restart:
-	@$(MAKE) down
-	@$(MAKE) up
+	docker compose down
+	docker compose up -d
 
-# 🏗️ Пересборка
 build:
-	$(COMPOSE) build --no-cache
+	docker compose build web
 
-# 📋 Логи
-logs:
-	$(COMPOSE) logs -f --tail=100
-
-# 🐚 Шелл внутри web
-shell:
-	$(COMPOSE) exec web sh
-
-# 🗃️ Миграции Django
-migrate:
-	$(DJANGO) migrate
-
-# 👤 Суперпользователь Django
-createsuperuser:
-	$(DJANGO) createsuperuser
-
-# 🧾 Сборка статики
-collectstatic:
-	$(DJANGO) collectstatic --noinput
-
-# 📦 Статус контейнеров
-status:
-	$(COMPOSE) ps
-
-# 🧹 Очистка builder-кэша
-prune:
-	docker builder prune --all --force
-
-# 🔨 Пересборка всего
 rebuild:
-	@$(MAKE) down
-	@$(MAKE) prune
-	@$(MAKE) up
+	docker compose build --no-cache web
 
-# 💾 Safely create a single up-to-date backup (в контейнере db)
-# Важно: pipefail + test -s, чтобы не получались "пустые" gzip при ошибке pg_dump
-backup:
-	$(COMPOSE) exec -T db sh -c '\
-		set -euo pipefail; \
-		mkdir -p /backups; \
-		echo "Preparing to create a new backup..."; \
-		if [ -f /backups/frs_db_latest.sql.gz ]; then \
-			mv /backups/frs_db_latest.sql.gz /backups/frs_db_old.sql.gz; \
-		fi; \
-		echo "Creating new backup..."; \
-		PGPASSWORD="$$POSTGRES_PASSWORD" pg_dump -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" | gzip -c > /backups/frs_db_latest.sql.gz; \
-		test -s /backups/frs_db_latest.sql.gz; \
-		echo "New backup created: /backups/frs_db_latest.sql.gz"; \
-		rm -f /backups/frs_db_old.sql.gz; \
-		echo "Old backup removed (if it existed)"; \
-	'
+logs:
+	docker logs -f $(WEB_CONTAINER) --tail=200
 
-# ♻️ Restore the database from the latest backup (в контейнере db)
-# Делает restore "без танцев": сначала чистит schema public, затем льёт дамп.
-# Плюс: ON_ERROR_STOP=1, чтобы psql падал на любой ошибке (а не печатал ERROR и ехал дальше).
-restore:
-	$(COMPOSE) exec -T db sh -c '\
-		set -euo pipefail; \
-		if [ ! -f /backups/frs_db_latest.sql.gz ]; then \
-			echo "Backup file /backups/frs_db_latest.sql.gz not found!"; \
-			exit 1; \
-		fi; \
-		echo "Dropping public schema..."; \
-		PGPASSWORD="$$POSTGRES_PASSWORD" psql -v ON_ERROR_STOP=1 -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"; \
-		echo "Restoring from /backups/frs_db_latest.sql.gz..."; \
-		PGPASSWORD="$$POSTGRES_PASSWORD" gunzip -c /backups/frs_db_latest.sql.gz | psql -v ON_ERROR_STOP=1 -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"; \
-		echo "Database successfully restored."; \
-	'
+migrate:
+	docker compose exec web uv run python manage.py migrate
 
-# 🧪 Тесты Django
-test:
-	$(DJANGO) test
+makemigrations:
+	docker compose exec web uv run python manage.py makemigrations
 
-# 💣 Сброс БД (используем переменные окружения из .env/compose)
-reset-db:
-	@echo "Сброс базы данных..."
-	$(COMPOSE) exec -T db psql -v ON_ERROR_STOP=1 -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
+collectstatic:
+	docker compose exec web uv run python manage.py collectstatic --noinput
 
-# 🔐 Генерация dev SSL через mkcert
-dev-cert:
-	@echo "Создание сертификатов через mkcert..."
-	@if ! mkcert -help > /dev/null 2>&1; then \
-		echo "mkcert не установлен! Установи: https://github.com/FiloSottile/mkcert"; \
-		exit 1; \
-	fi
-	@mkdir -p certs
-	mkcert -cert-file certs/localhost.crt -key-file certs/localhost.key localhost
+shell:
+	docker compose exec web uv run python manage.py shell
 
-# 🚀 Псевдодеплой (на сервер с docker)
-deploy:
-	@echo "Псевдо-деплой на удалённый сервер..."
-	@echo "TODO: настроить ssh/scp/docker login для деплоя"
+web:
+	docker compose exec web bash
+
+db:
+	docker compose exec db psql -U $$POSTGRES_USER $$POSTGRES_DB

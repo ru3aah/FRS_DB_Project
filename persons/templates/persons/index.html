@@ -3,42 +3,120 @@
 {% block title %}FRS DB | Persons list{% endblock %}
 
 {% block content %}
-<h1>Persons</h1>
 
-<table class="table table-striped">
+{% include "includes/navbar.html" %}
+
+<div class="container mt-4">
+
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="m-0">Persons</h1>
+
+    {% if can_manage_hr %}
+      <div class="d-flex gap-2">
+        <a class="btn btn-success" href="{% url 'persons:create' %}">
+          Add person
+        </a>
+
+        <!-- Company filters will be implemented later via staff app -->
+        <button class="btn btn-outline-secondary" type="button" disabled>
+          Show for company
+        </button>
+        <button class="btn btn-outline-secondary" type="button" disabled>
+          Show all
+        </button>
+      </div>
+    {% endif %}
+  </div>
+
+  <div class="text-muted small mb-3">
+    Company filters will be added later (via staff app).
+  </div>
+
+  <table class="table table-striped align-middle">
     <thead>
-        <tr>
-            <th> # </th>
-            <th>PID</th>
-            <th>First name</th>
-            <th>Second name</th>
-            <th>Family name</th>
-            <th>DOB</th>
-            <th>Gender</th>
-        </tr>
+      <tr>
+        <th>#</th>
+        <th>PID</th>
+        <th>First name</th>
+        <th>Second name</th>
+        <th>Family name</th>
+        <th>DOB</th>
+        <th>Gender</th>
+        <th>Nationality</th>
+        <th class="text-end">Actions</th>
+      </tr>
     </thead>
     <tbody>
-        {% for person in persons %}
+      {% for person in persons %}
         <tr>
-            <td>{{ forloop.counter }}. </td>
-            <td>
-                <a href="{% url 'persons:edit' person.pk %}">
-                    {{ person.pk }}
-                </a>
-            </td>
-            <td>{{ person.first_name }}</td>
-            <td>{{ person.second_name }}</td>
-            <td>{{ person.family_name }}</td>
-            <td>{{ person.dob }}</td>
-            <td>{{ person.get_gender_display }}</td>
+          <td>{{ page_obj.start_index|add:forloop.counter0 }}</td>
+          <td>{{ person.pk }}</td>
+          <td>{{ person.first_name }}</td>
+          <td>{{ person.second_name }}</td>
+          <td>{{ person.family_name }}</td>
+          <td>{{ person.dob }}</td>
+          <td>{{ person.get_gender_display }}</td>
+          <td>
+            {% if person.nationality %}
+              {{ person.nationality.code3 }} {{ person.nationality.short_name }}
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </td>
+          <td class="text-end">
+            <a class="btn btn-sm btn-outline-primary"
+               href="{% url 'persons:edit' person.pk %}">
+              Edit
+            </a>
+          </td>
         </tr>
-        {% empty %}
+      {% empty %}
         <tr>
-            <td colspan="7" class="text-muted text-center">
-                No persons found
-            </td>
+          <td colspan="9" class="text-muted text-center">
+            No persons found
+          </td>
         </tr>
-        {% endfor %}
+      {% endfor %}
     </tbody>
-</table>
+  </table>
+
+  {% if is_paginated %}
+    <nav aria-label="Persons pagination" class="mt-3">
+      <ul class="pagination">
+
+        {% if page_obj.has_previous %}
+          <li class="page-item">
+            <a class="page-link" href="?page=1">First</a>
+          </li>
+          <li class="page-item">
+            <a class="page-link" href="?page={{ page_obj.previous_page_number }}">Previous</a>
+          </li>
+        {% else %}
+          <li class="page-item disabled"><span class="page-link">First</span></li>
+          <li class="page-item disabled"><span class="page-link">Previous</span></li>
+        {% endif %}
+
+        <li class="page-item active">
+          <span class="page-link">
+            Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+          </span>
+        </li>
+
+        {% if page_obj.has_next %}
+          <li class="page-item">
+            <a class="page-link" href="?page={{ page_obj.next_page_number }}">Next</a>
+          </li>
+          <li class="page-item">
+            <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}">Last</a>
+          </li>
+        {% else %}
+          <li class="page-item disabled"><span class="page-link">Next</span></li>
+          <li class="page-item disabled"><span class="page-link">Last</span></li>
+        {% endif %}
+
+      </ul>
+    </nav>
+  {% endif %}
+
+</div>
 {% endblock %}

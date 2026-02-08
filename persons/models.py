@@ -41,6 +41,11 @@ class Person(models.Model):
         null=True,
     )
 
+    class Meta:
+        permissions = [
+            ("hr_manager", "Can manage HR (persons)"),
+        ]
+
     def __str__(self) -> str:
         return f"{self.family_name} {self.first_name} {self.second_name}".strip()
 

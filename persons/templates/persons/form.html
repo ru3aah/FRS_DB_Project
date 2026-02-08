@@ -1,19 +1,215 @@
 {% extends "base.html" %}
 
-{% block title %}Create Person{% endblock %}
+{% block title %}
+  {% if object %}FRS DB | Edit person{% else %}FRS DB | Create person{% endif %}
+{% endblock %}
 
 {% block content %}
-<div class="container mt-4" style="max-width: 720px;">
-  <h1 class="h4 mb-3">Create Person</h1>
 
-  <form method="post" novalidate>
-    {% csrf_token %}
-    {{ form.as_p }}
+{% include "includes/navbar.html" %}
+
+<div class="container mt-4" style="max-width: 1100px;">
+
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+      <h1 class="h4 mb-0">
+        {% if object %}Edit person{% else %}Create person{% endif %}
+      </h1>
+      {% if object %}
+        <div class="text-muted small">PID: {{ object.pk }}</div>
+      {% endif %}
+    </div>
 
     <div class="d-flex gap-2">
-      <button type="submit" class="btn btn-primary">Save</button>
-      <a href="{% url 'persons:index' %}" class="btn btn-secondary">Cancel</a>
+      <a class="btn btn-success" href="{% url 'persons:create' %}">Add person</a>
+
+      {% if object %}
+        <button class="btn btn-outline-secondary" type="button" disabled>
+          Documents
+        </button>
+      {% endif %}
     </div>
-  </form>
+  </div>
+
+  <div class="card">
+    <div class="card-body">
+
+      <form method="post" enctype="multipart/form-data" novalidate>
+        {% csrf_token %}
+
+        {% if form.non_field_errors %}
+          <div class="alert alert-danger">
+            {{ form.non_field_errors }}
+          </div>
+        {% endif %}
+
+        <div class="row g-4">
+          <!-- Left: photo -->
+          <div class="col-md-3">
+            <div class="mb-2 fw-semibold">Photo</div>
+
+            {% if object and object.photo %}
+              <img src="{{ object.photo.url }}" alt="Photo" class="img-thumbnail w-100">
+            {% else %}
+              <div class="border rounded p-4 text-muted text-center">
+                No photo
+              </div>
+            {% endif %}
+
+            <div class="d-grid gap-2 mt-2">
+              <button type="button" class="btn btn-outline-primary" id="btnPickPhoto">
+                Edit photo
+              </button>
+              <div class="text-muted small">
+                Pick a file and click <b>Save</b>.
+              </div>
+            </div>
+
+            {# keep photo field here (hidden visually), we trigger it via button #}
+            <div class="mt-2" style="display:none;">
+              {{ form.photo }}
+            </div>
+
+            {% if form.photo.errors %}
+              <div class="text-danger small mt-2">
+                {{ form.photo.errors }}
+              </div>
+            {% endif %}
+          </div>
+
+          <!-- Right: personal data -->
+          <div class="col-md-9">
+            <div class="mb-2 fw-semibold">Personal data</div>
+
+            <div class="row g-3">
+              <!-- 3 columns for names -->
+              <div class="col-md-4">
+                <label class="form-label" for="{{ form.first_name.id_for_label }}">
+                  {{ form.first_name.label }}
+                </label>
+                {{ form.first_name }}
+                {% if form.first_name.errors %}
+                  <div class="text-danger small">{{ form.first_name.errors }}</div>
+                {% endif %}
+              </div>
+
+              <div class="col-md-4">
+                <label class="form-label" for="{{ form.second_name.id_for_label }}">
+                  {{ form.second_name.label }}
+                </label>
+                {{ form.second_name }}
+                {% if form.second_name.errors %}
+                  <div class="text-danger small">{{ form.second_name.errors }}</div>
+                {% endif %}
+              </div>
+
+              <div class="col-md-4">
+                <label class="form-label" for="{{ form.family_name.id_for_label }}">
+                  {{ form.family_name.label }}
+                </label>
+                {{ form.family_name }}
+                {% if form.family_name.errors %}
+                  <div class="text-danger small">{{ form.family_name.errors }}</div>
+                {% endif %}
+              </div>
+
+              <div class="col-md-4">
+                <label class="form-label" for="{{ form.dob.id_for_label }}">
+                  {{ form.dob.label }}
+                </label>
+                {{ form.dob }}
+                {% if form.dob.errors %}
+                  <div class="text-danger small">{{ form.dob.errors }}</div>
+                {% endif %}
+              </div>
+
+              <div class="col-md-4">
+                <label class="form-label" for="{{ form.gender.id_for_label }}">
+                  {{ form.gender.label }}
+                </label>
+                {{ form.gender }}
+                {% if form.gender.errors %}
+                  <div class="text-danger small">{{ form.gender.errors }}</div>
+                {% endif %}
+              </div>
+
+              <div class="col-md-4">
+                <label class="form-label" for="{{ form.nationality.id_for_label }}">
+                  {{ form.nationality.label }}
+                </label>
+                {{ form.nationality }}
+                {% if form.nationality.errors %}
+                  <div class="text-danger small">{{ form.nationality.errors }}</div>
+                {% endif %}
+              </div>
+            </div>
+
+            <!-- Documents placeholder -->
+            <hr class="my-4">
+
+            <div class="d-flex justify-content-between align-items-center">
+              <div>
+                <div class="fw-semibold">Documents</div>
+                <div class="text-muted small">
+                  Documents editor will be implemented as a separate view/template.
+                </div>
+              </div>
+
+              {% if object %}
+                <button class="btn btn-outline-secondary" type="button" disabled>
+                  Open documents
+                </button>
+              {% endif %}
+            </div>
+
+          </div>
+        </div>
+
+        <div class="d-flex gap-2 mt-4">
+          <button type="submit" class="btn btn-primary">Save</button>
+          <a href="{% url 'persons:index' %}" class="btn btn-secondary">Cancel</a>
+        </div>
+
+      </form>
+
+    </div>
+  </div>
 </div>
+
+<script>
+  // Apply Bootstrap classes to inputs/selects/textarea + wire "Edit photo" button to the file input
+  document.addEventListener("DOMContentLoaded", () => {
+    const fields = document.querySelectorAll("input, select, textarea");
+    fields.forEach((el) => {
+      if (el.type === "file") {
+        // we keep file input hidden and opened via button
+        return;
+      }
+      if (!el.classList.contains("form-control")) {
+        el.classList.add("form-control");
+      }
+    });
+
+    // gender is a select -> still form-control is fine, but you may prefer form-select
+    const gender = document.getElementById("{{ form.gender.id_for_label }}");
+    if (gender) {
+      gender.classList.remove("form-control");
+      gender.classList.add("form-select");
+    }
+
+    const nationality = document.getElementById("{{ form.nationality.id_for_label }}");
+    if (nationality) {
+      nationality.classList.remove("form-control");
+      nationality.classList.add("form-select");
+    }
+
+    const photoInput = document.getElementById("{{ form.photo.id_for_label }}");
+    const btnPickPhoto = document.getElementById("btnPickPhoto");
+
+    if (btnPickPhoto && photoInput) {
+      btnPickPhoto.addEventListener("click", () => photoInput.click());
+    }
+  });
+</script>
+
 {% endblock %}
