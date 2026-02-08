@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+
+{% block title %}FRS DB | Add document type{% endblock %}
+
+{% block content %}
+
+{% include "includes/navbar.html" %}
+
+<div class="container mt-4" style="max-width: 720px;">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="h4 m-0">Add document type</h1>
+  </div>
+
+  <div class="card">
+    <div class="card-body">
+
+      <form method="post" novalidate>
+        {% csrf_token %}
+
+        {% if form.non_field_errors %}
+          <div class="alert alert-danger">
+            {{ form.non_field_errors }}
+          </div>
+        {% endif %}
+
+        <div class="row g-3">
+          <div class="col-md-4">
+            <label class="form-label">{{ form.code.label }}</label>
+            {{ form.code }}
+            {% if form.code.errors %}
+              <div class="text-danger small">{{ form.code.errors }}</div>
+            {% endif %}
+          </div>
+
+          <div class="col-md-8">
+            <label class="form-label">{{ form.name.label }}</label>
+            {{ form.name }}
+            {% if form.name.errors %}
+              <div class="text-danger small">{{ form.name.errors }}</div>
+            {% endif %}
+          </div>
+
+          <div class="col-12">
+            <div class="form-check mt-2">
+              {{ form.is_active }}
+              <label class="form-check-label" for="{{ form.is_active.id_for_label }}">
+                Active
+              </label>
+            </div>
+            {% if form.is_active.errors %}
+              <div class="text-danger small">{{ form.is_active.errors }}</div>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="d-flex gap-2 mt-4">
+          <button type="submit" class="btn btn-primary">Save</button>
+          <a href="{% url 'persons:index' %}" class="btn btn-secondary">Close</a>
+        </div>
+      </form>
+
+    </div>
+  </div>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  const fields = document.querySelectorAll("input, select, textarea");
+  fields.forEach((el) => {
+    // Don't force form-control on checkbox
+    if (el.type === "checkbox") return;
+    if (!el.classList.contains("form-control")) {
+      el.classList.add("form-control");
+    }
+  });
+});
+</script>
+
+{% endblock %}

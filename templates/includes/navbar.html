@@ -4,10 +4,12 @@
   <div class="container-fluid">
 
     <a class="navbar-brand d-flex align-items-center" href="{% url 'main' %}">
+      {# Always show system logo first #}
+      <img src="{% static 'img/logos/frs_logo.png' %}" alt="FRS" height="40" class="me-2">
+
+      {# Then company logo if available #}
       {% if company and company.logo %}
         <img src="{{ company.logo.url }}" alt="Company logo" height="40" class="me-2">
-      {% else %}
-        <img src="{% static 'img/logos/frs_logo.png' %}" alt="FRS logo" height="40" class="me-2">
       {% endif %}
 
       <strong>
@@ -39,7 +41,9 @@
             </a>
             <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="hrDropdown">
               <li>
-                <a class="dropdown-item" href="{% url 'persons:index' %}">Persons</a>
+                <a class="dropdown-item" href="{% url 'persons:index' %}">
+                  Persons
+                </a>
               </li>
             </ul>
           </li>

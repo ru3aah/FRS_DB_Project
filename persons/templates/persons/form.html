@@ -6,321 +6,342 @@
 {% endblock %}
 
 {% block content %}
-
 {% include "includes/navbar.html" %}
 
 <div class="container mt-4">
 
-  <div class="d-flex justify-content-between align-items-center mb-3">
-    <div>
-      <h1 class="h4 mb-0">
-        {% if object %}Edit person{% else %}Create person{% endif %}
-      </h1>
-      {% if object %}
-        <div class="text-muted small">PID: {{ object.pk }}</div>
-      {% endif %}
+  {# FORM: header внутри формы #}
+  <form id="personForm" method="post" enctype="multipart/form-data" novalidate>
+    {% csrf_token %}
+
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <div>
+        <h1 class="h4 mb-0">
+          {% if object %}Edit person{% else %}Create person{% endif %}
+        </h1>
+        {% if object %}
+          <div class="text-muted small">PID: {{ object.pk }}</div>
+        {% endif %}
+      </div>
+
+      <div class="d-flex gap-2 align-items-center flex-wrap">
+
+        {# Photo buttons (NEW) #}
+        <button type="button" class="btn btn-outline-primary" id="photoPickBtn">
+          {% if object and object.photo %}Replace photo{% else %}Add photo{% endif %}
+        </button>
+
+        <button type="button" class="btn btn-outline-danger" id="photoDeleteBtn">
+          Delete photo
+        </button>
+
+        <div class="vr mx-1"></div>
+
+        <button type="submit" class="btn btn-primary">
+          Save
+        </button>
+
+        <a href="{% url 'persons:index' %}" class="btn btn-outline-secondary">
+          Exit
+        </a>
+
+        <a href="{% url 'persons:create' %}" class="btn btn-success">
+          Add new person
+        </a>
+      </div>
     </div>
 
-    <div class="d-flex gap-2">
-      <a class="btn btn-success" href="{% url 'persons:create' %}">Add new person</a>
-      <a class="btn btn-outline-secondary" href="{% url 'persons:index' %}">Exit</a>
-    </div>
-  </div>
-
-  <!-- Bootstrap Toast (messages) -->
-  {% if messages %}
-    <div class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 1100;">
-      {% for message in messages %}
-        <div class="toast align-items-center text-bg-success border-0 mb-2"
-             role="alert" aria-live="assertive" aria-atomic="true"
-             data-bs-delay="2500">
-          <div class="d-flex">
-            <div class="toast-body">
-              {{ message }}
+    <!-- Toast messages -->
+    {% if messages %}
+      <div class="toast-container position-fixed top-0 end-0 p-3" style="z-index:1100;">
+        {% for message in messages %}
+          <div class="toast text-bg-success border-0 mb-2" data-bs-delay="2500">
+            <div class="d-flex">
+              <div class="toast-body">{{ message }}</div>
+              <button type="button"
+                      class="btn-close btn-close-white me-2 m-auto"
+                      data-bs-dismiss="toast"></button>
             </div>
-            <button type="button" class="btn-close btn-close-white me-2 m-auto"
-                    data-bs-dismiss="toast" aria-label="Close"></button>
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    {% if form.non_field_errors %}
+      <div class="alert alert-danger">
+        {{ form.non_field_errors }}
+      </div>
+    {% endif %}
+
+    <div class="row g-3">
+
+      <!-- Column 1: Photo -->
+      <div class="col-lg-3">
+        <div class="card h-100">
+          <div class="card-header fw-semibold">
+            Photo
+          </div>
+
+          <div class="card-body text-center">
+
+            {% if object and object.photo %}
+              <img id="photoPreview"
+                   src="{{ object.photo.url }}"
+                   class="img-thumbnail w-100"
+                   alt="Photo">
+            {% else %}
+              <img id="photoPreview"
+                   src="{% static 'img/logos/frs_logo.png' %}"
+                   class="img-thumbnail w-100"
+                   alt="Placeholder">
+            {% endif %}
+
+            <!-- filename only -->
+            <div class="text-muted small mt-2" id="photoFilename">
+              {% if object and object.photo %}
+                {{ object.photo.name|cut:"persons/photos/" }}
+              {% else %}
+                No photo uploaded
+              {% endif %}
+            </div>
+
+            <!-- real Django field (keep it, but hide it) -->
+            <div class="mt-3 d-none">
+              {{ form.photo }}
+            </div>
+
+            {# If Django renders "photo-clear" checkbox for existing images, we keep it hidden and toggle via JS #}
+            <div class="d-none">
+              {# sometimes Django adds clear checkbox outside ModelForm rendering, but we try to find it in JS anyway #}
+            </div>
+
+            {% if form.photo.errors %}
+              <div class="text-danger small mt-2">{{ form.photo.errors }}</div>
+            {% endif %}
+
           </div>
         </div>
-      {% endfor %}
-    </div>
-  {% endif %}
+      </div>
 
-  <div class="card shadow-sm">
+      <!-- Column 2: Personal data -->
+      <div class="col-lg-4">
+        <div class="card h-100">
+          <div class="card-header fw-semibold">
+            Personal data
+          </div>
+
+          <div class="card-body">
+
+            <div class="mb-3">
+              <label class="form-label">First name</label>
+              {{ form.first_name }}
+              {% if form.first_name.errors %}<div class="text-danger small">{{ form.first_name.errors }}</div>{% endif %}
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label">Second name</label>
+              {{ form.second_name }}
+              {% if form.second_name.errors %}<div class="text-danger small">{{ form.second_name.errors }}</div>{% endif %}
+            </div>
+
+            <div class="mb-0">
+              <label class="form-label">Family name</label>
+              {{ form.family_name }}
+              {% if form.family_name.errors %}<div class="text-danger small">{{ form.family_name.errors }}</div>{% endif %}
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+      <!-- Column 3: Details -->
+      <div class="col-lg-5">
+        <div class="card h-100">
+          <div class="card-header fw-semibold">
+            Details
+          </div>
+
+          <div class="card-body">
+            <div class="row g-3">
+
+              <div class="col-md-6">
+                <label class="form-label">Date of birth</label>
+                {{ form.dob }}
+                {% if form.dob.errors %}<div class="text-danger small">{{ form.dob.errors }}</div>{% endif %}
+              </div>
+
+              <div class="col-md-6">
+                <label class="form-label">Gender</label>
+                {{ form.gender }}
+                {% if form.gender.errors %}<div class="text-danger small">{{ form.gender.errors }}</div>{% endif %}
+              </div>
+
+              <div class="col-12">
+                <label class="form-label">Nationality</label>
+                {{ form.nationality }}
+                {% if form.nationality.errors %}<div class="text-danger small">{{ form.nationality.errors }}</div>{% endif %}
+              </div>
+
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+  </form><!-- /personForm -->
+
+  <!-- Documents FULL WIDTH -->
+  <div class="card shadow-sm mt-4">
     <div class="card-body">
 
-      <form method="post" enctype="multipart/form-data" novalidate>
-        {% csrf_token %}
+      <div class="d-flex justify-content-between align-items-center">
+        <div class="fw-semibold">Documents</div>
 
-        {% if form.non_field_errors %}
-          <div class="alert alert-danger">
-            {{ form.non_field_errors }}
-          </div>
+        {% if object %}
+          <a class="btn btn-outline-secondary btn-sm"
+             href="{% url 'persons:doc_create' object.pk %}">
+            Add document
+          </a>
+        {% endif %}
+      </div>
+
+      {% if not object %}
+        <div class="text-muted small mt-2">
+          Save the person first to manage documents.
+        </div>
+      {% else %}
+
+        <div class="table-responsive mt-3">
+          <table class="table table-sm table-striped align-middle mb-0">
+            <thead>
+              <tr>
+                <th style="width:40px;">#</th>
+                <th>Type</th>
+                <th>Number</th>
+                <th>Issued</th>
+                <th>Valid</th>
+                <th class="text-end" style="width:180px;">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for doc in docs_page_obj %}
+                <tr>
+                  <td>{{ forloop.counter }}</td>
+                  <td>{{ doc.id_type.name }}</td>
+                  <td>{{ doc.id_number }}</td>
+                  <td>{{ doc.issued_on|default:"—" }}</td>
+                  <td>{{ doc.valid_till|default:"—" }}</td>
+                  <td class="text-end">
+                    <a class="btn btn-sm btn-outline-primary"
+                       href="{% url 'persons:doc_edit' object.pk doc.pk %}">
+                      View / Edit
+                    </a>
+                    <a class="btn btn-sm btn-outline-danger"
+                       href="{% url 'persons:doc_delete' object.pk doc.pk %}">
+                      Delete
+                    </a>
+                  </td>
+                </tr>
+              {% empty %}
+                <tr>
+                  <td colspan="6" class="text-muted">
+                    No documents yet.
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+
+        {% if docs_is_paginated %}
+          <nav class="mt-3">
+            <ul class="pagination pagination-sm mb-0">
+              {% if docs_page_obj.has_previous %}
+                <li class="page-item">
+                  <a class="page-link"
+                     href="?{{ docs_page_param }}={{ docs_page_obj.previous_page_number }}">‹</a>
+                </li>
+              {% endif %}
+
+              {% for p in docs_page_obj.paginator.page_range %}
+                <li class="page-item {% if p == docs_page_obj.number %}active{% endif %}">
+                  <a class="page-link"
+                     href="?{{ docs_page_param }}={{ p }}">{{ p }}</a>
+                </li>
+              {% endfor %}
+
+              {% if docs_page_obj.has_next %}
+                <li class="page-item">
+                  <a class="page-link"
+                     href="?{{ docs_page_param }}={{ docs_page_obj.next_page_number }}">›</a>
+                </li>
+              {% endif %}
+            </ul>
+          </nav>
         {% endif %}
 
-        <div class="row g-3">
-
-          <!-- Column 1: Photo -->
-          <div class="col-lg-3">
-            <div class="card h-100">
-              <div class="card-header d-flex align-items-center justify-content-between">
-                <span class="fw-semibold">Photo</span>
-                <span class="text-muted small">Drag & drop</span>
-              </div>
-
-              <div class="card-body" id="photoDropZone" style="cursor: pointer;">
-                {% if object and object.photo %}
-                  <img id="photoPreview" src="{{ object.photo.url }}" alt="Photo" class="img-thumbnail w-100">
-                {% else %}
-                  <img id="photoPreview" src="{% static 'img/logos/frs_logo.png' %}" alt="Placeholder" class="img-thumbnail w-100">
-                  <div class="text-muted small mt-2">No photo uploaded (placeholder shown).</div>
-                {% endif %}
-              </div>
-
-              <div class="card-footer">
-                <div class="d-grid gap-2">
-                  <button type="button" class="btn btn-outline-primary" id="photoPickBtn">
-                    {% if object and object.photo %}Edit photo{% else %}Add photo{% endif %}
-                  </button>
-                  <button type="button" class="btn btn-outline-danger" id="photoRemoveBtn">
-                    Remove photo
-                  </button>
-                </div>
-
-                <!-- Real Django field (hidden) -->
-                <div class="mt-3 d-none">
-                  {{ form.photo }}
-                </div>
-
-                <!-- Clear checkbox (hidden, toggled by JS) -->
-                <div class="mt-2 d-none" id="photoClearWrap"></div>
-
-                <div class="text-muted small mt-2">
-                  Photo is saved when you click <strong>Save</strong>.
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Column 2: Personal data -->
-          <div class="col-lg-4">
-            <div class="card h-100">
-              <div class="card-header fw-semibold">Personal data</div>
-              <div class="card-body">
-
-                <div class="mb-3">
-                  <label class="form-label" for="{{ form.first_name.id_for_label }}">First name</label>
-                  {{ form.first_name }}
-                  {% if form.first_name.errors %}<div class="text-danger small">{{ form.first_name.errors }}</div>{% endif %}
-                </div>
-
-                <div class="mb-3">
-                  <label class="form-label" for="{{ form.second_name.id_for_label }}">Second name</label>
-                  {{ form.second_name }}
-                  {% if form.second_name.errors %}<div class="text-danger small">{{ form.second_name.errors }}</div>{% endif %}
-                </div>
-
-                <div class="mb-0">
-                  <label class="form-label" for="{{ form.family_name.id_for_label }}">Family name</label>
-                  {{ form.family_name }}
-                  {% if form.family_name.errors %}<div class="text-danger small">{{ form.family_name.errors }}</div>{% endif %}
-                </div>
-
-              </div>
-            </div>
-          </div>
-
-          <!-- Column 3: Details + Documents -->
-          <div class="col-lg-5">
-            <div class="card h-100">
-              <div class="card-header fw-semibold">Details</div>
-              <div class="card-body">
-
-                <div class="row g-3">
-                  <div class="col-md-6">
-                    <label class="form-label" for="{{ form.dob.id_for_label }}">Date of birth</label>
-                    {{ form.dob }}
-                    {% if form.dob.errors %}<div class="text-danger small">{{ form.dob.errors }}</div>{% endif %}
-                  </div>
-
-                  <div class="col-md-6">
-                    <label class="form-label" for="{{ form.gender.id_for_label }}">Gender</label>
-                    {{ form.gender }}
-                    {% if form.gender.errors %}<div class="text-danger small">{{ form.gender.errors }}</div>{% endif %}
-                  </div>
-
-                  <div class="col-12">
-                    <label class="form-label" for="{{ form.nationality.id_for_label }}">Nationality</label>
-                    {{ form.nationality }}
-                    {% if form.nationality.errors %}<div class="text-danger small">{{ form.nationality.errors }}</div>{% endif %}
-                  </div>
-                </div>
-
-                <hr class="my-4">
-
-                <div class="d-flex justify-content-between align-items-center">
-                  <div class="fw-semibold">Documents</div>
-
-                  {% if object %}
-                    <button class="btn btn-outline-secondary btn-sm" type="button" disabled>
-                      Add document (later)
-                    </button>
-                  {% endif %}
-                </div>
-
-                {% if not object %}
-                  <div class="text-muted small mt-2">
-                    Save the person first to manage documents.
-                  </div>
-                {% else %}
-
-                  <div class="table-responsive mt-3">
-                    <table class="table table-sm table-striped align-middle mb-0">
-                      <thead>
-                        <tr>
-                          <th style="width: 48px;">#</th>
-                          <th>Type</th>
-                          <th>Number</th>
-                          <th>Issued</th>
-                          <th>Valid till</th>
-                          <th class="text-end" style="width: 120px;">Action</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {% for doc in person_docs %}
-                          <tr>
-                            <td>{{ forloop.counter }}</td>
-                            <td>{{ doc.id_type.name }}</td>
-                            <td>{{ doc.id_number }}</td>
-                            <td>
-                              {% if doc.issued_on %}{{ doc.issued_on }}{% else %}<span class="text-muted">—</span>{% endif %}
-                            </td>
-                            <td>
-                              {% if doc.valid_till %}{{ doc.valid_till }}{% else %}<span class="text-muted">—</span>{% endif %}
-                            </td>
-                            <td class="text-end">
-                              <a class="btn btn-sm btn-outline-primary"
-                                 href="{% url 'under_construction' %}">
-                                View/Edit
-                              </a>
-                            </td>
-                          </tr>
-                        {% empty %}
-                          <tr>
-                            <td colspan="6" class="text-muted">
-                              No documents yet.
-                            </td>
-                          </tr>
-                        {% endfor %}
-                      </tbody>
-                    </table>
-                  </div>
-
-                {% endif %}
-
-              </div>
-            </div>
-          </div>
-
-        </div>
-
-        <div class="d-flex gap-2 mt-3">
-          <button type="submit" class="btn btn-primary">Save</button>
-          <a href="{% url 'persons:index' %}" class="btn btn-secondary">Exit</a>
-        </div>
-
-      </form>
-
+      {% endif %}
     </div>
   </div>
+
 </div>
 
 <script>
-  document.addEventListener("DOMContentLoaded", () => {
-    // Apply Bootstrap classes
-    const fields = document.querySelectorAll("input, select, textarea");
-    fields.forEach((el) => {
-      if (el.type !== "checkbox" && !el.classList.contains("form-control")) {
-        el.classList.add("form-control");
-      }
-    });
+document.addEventListener("DOMContentLoaded", () => {
+  // Toasts
+  document.querySelectorAll(".toast").forEach(el => new bootstrap.Toast(el).show());
 
-    // Show Bootstrap toasts (messages)
-    const toastElList = [].slice.call(document.querySelectorAll(".toast"));
-    toastElList.forEach((toastEl) => {
-      const toast = new bootstrap.Toast(toastEl);
-      toast.show();
-    });
-
-    // Photo controls
-    const fileInput = document.querySelector('input[type="file"][name="photo"]');
-    const preview = document.getElementById("photoPreview");
-    const pickBtn = document.getElementById("photoPickBtn");
-    const removeBtn = document.getElementById("photoRemoveBtn");
-    const dropZone = document.getElementById("photoDropZone");
-
-    const clearCheckbox = document.querySelector('input[type="checkbox"][name="photo-clear"]');
-    const clearWrap = document.getElementById("photoClearWrap");
-    if (clearCheckbox) {
-      const clearLabel = document.querySelector(`label[for="${clearCheckbox.id}"]`);
-      if (clearLabel) clearWrap.appendChild(clearLabel);
-      clearWrap.appendChild(clearCheckbox);
-    }
-
-    const setPreviewFromFile = (file) => {
-      if (!file) return;
-      const url = URL.createObjectURL(file);
-      preview.src = url;
-      if (clearCheckbox) clearCheckbox.checked = false;
-    };
-
-    if (pickBtn && fileInput) {
-      pickBtn.addEventListener("click", () => fileInput.click());
-    }
-
-    if (fileInput) {
-      fileInput.addEventListener("change", () => {
-        const file = fileInput.files && fileInput.files[0];
-        setPreviewFromFile(file);
-      });
-    }
-
-    if (removeBtn) {
-      removeBtn.addEventListener("click", () => {
-        if (clearCheckbox) clearCheckbox.checked = true;
-        if (fileInput) fileInput.value = "";
-        preview.src = "{% static 'img/logos/frs_logo.png' %}";
-      });
-    }
-
-    // Drag & drop
-    const preventDefaults = (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-    };
-
-    if (dropZone && fileInput) {
-      ["dragenter", "dragover", "dragleave", "drop"].forEach((eventName) => {
-        dropZone.addEventListener(eventName, preventDefaults, false);
-      });
-
-      dropZone.addEventListener("drop", (e) => {
-        const dt = e.dataTransfer;
-        const file = dt && dt.files && dt.files[0];
-        if (!file) return;
-
-        try {
-          const dataTransfer = new DataTransfer();
-          dataTransfer.items.add(file);
-          fileInput.files = dataTransfer.files;
-        } catch (err) {
-          // Some browsers may restrict programmatic file assignment.
-        }
-
-        setPreviewFromFile(file);
-      });
+  // Bootstrap classes
+  document.querySelectorAll("input, select, textarea").forEach(el => {
+    if (el.type !== "checkbox" && el.type !== "file" && !el.classList.contains("form-control")) {
+      el.classList.add("form-control");
     }
   });
+
+  // Photo logic
+  const fileInput = document.querySelector('input[type="file"][name="photo"]');
+  const preview = document.getElementById("photoPreview");
+  const filenameEl = document.getElementById("photoFilename");
+  const pickBtn = document.getElementById("photoPickBtn");
+  const delBtn = document.getElementById("photoDeleteBtn");
+
+  // Django clear checkbox (only exists when editing existing photo)
+  const clearCheckbox = document.querySelector('input[type="checkbox"][name="photo-clear"]');
+
+  const setPreviewFromFile = (file) => {
+    if (!file) return;
+    preview.src = URL.createObjectURL(file);
+    if (filenameEl) filenameEl.textContent = file.name;
+    if (clearCheckbox) clearCheckbox.checked = false;
+  };
+
+  if (pickBtn && fileInput) {
+    pickBtn.addEventListener("click", () => fileInput.click());
+  }
+
+  if (fileInput) {
+    fileInput.addEventListener("change", () => {
+      const file = fileInput.files && fileInput.files[0];
+      if (file) setPreviewFromFile(file);
+    });
+  }
+
+  if (delBtn) {
+    delBtn.addEventListener("click", () => {
+      // mark for deletion on save (if checkbox exists)
+      if (clearCheckbox) clearCheckbox.checked = true;
+
+      // clear newly chosen file
+      if (fileInput) fileInput.value = "";
+
+      // reset preview & filename
+      preview.src = "{% static 'img/logos/frs_logo.png' %}";
+      if (filenameEl) filenameEl.textContent = "No photo uploaded";
+    });
+  }
+});
 </script>
 
 {% endblock %}
