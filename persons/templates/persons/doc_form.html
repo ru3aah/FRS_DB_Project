@@ -8,130 +8,222 @@
 {% block content %}
 {% include "includes/navbar.html" %}
 
-<div class="container mt-4" style="max-width: 1100px;">
+<div class="container mt-3" style="max-width: 1100px;">
 
-  <div class="d-flex justify-content-between align-items-start mb-3">
+  {# ===== Header ===== #}
+  <div class="d-flex justify-content-between align-items-start mb-1">
     <div>
       <h1 class="h4 mb-0">
         {% if object %}Edit document{% else %}Add document{% endif %}
       </h1>
-      <div class="text-muted small">Person: {{ person_obj }}</div>
+
+      <div class="small text-muted">
+        Person: {{ person_obj }}
+      </div>
+
       {% if object %}
-        <div class="text-muted small">Document ID: {{ object.pk }}</div>
+        <div class="small text-muted">
+          Doc ID: {{ object.pk }}
+        </div>
       {% endif %}
     </div>
 
     <div class="d-flex gap-2">
-      <button type="submit" form="docForm" class="btn btn-primary">Save</button>
-      <a class="btn btn-outline-secondary"
+      <button type="submit" form="docForm" class="btn btn-primary btn-sm">
+        Save
+      </button>
+      <a class="btn btn-outline-secondary btn-sm"
          href="{% url 'persons:edit' person_obj.pk %}">
         Back to person
       </a>
     </div>
   </div>
 
-  <div class="card shadow-sm mb-4">
-    <div class="card-body">
+  {# ===== Form card ===== #}
+  <div class="card shadow-lg mb-3">
+    <div class="card-body pt-3">
 
-      <form id="docForm" method="post" enctype="multipart/form-data" novalidate>
+      <form id="docForm"
+            method="post"
+            enctype="multipart/form-data"
+            novalidate>
+
         {% csrf_token %}
 
         {% if form.non_field_errors %}
-          <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+          <div class="alert alert-danger mb-2">
+            {{ form.non_field_errors }}
+          </div>
         {% endif %}
 
         <div class="row g-3">
-          <div class="col-md-6">
-            <label class="form-label">{{ form.id_type.label }}</label>
-            {{ form.id_type }}
-            {% if form.id_type.errors %}<div class="text-danger small">{{ form.id_type.errors }}</div>{% endif %}
-          </div>
+
+          {# ---------- ROW 1 ---------- #}
 
           <div class="col-md-6">
-            <label class="form-label">{{ form.id_number.label }}</label>
-            {{ form.id_number }}
-            {% if form.id_number.errors %}<div class="text-danger small">{{ form.id_number.errors }}</div>{% endif %}
+            <div class="d-flex align-items-center gap-2 justify-content-start">
+              <label class="form-label mb-0" style="min-width: 90px;">
+                Doc type
+              </label>
+
+              <div class="flex-grow-1">
+                {{ form.id_type }}
+              </div>
+
+              <a class="btn btn-sm btn-outline-secondary"
+                 href="{% url 'persons:idtype_create' %}">
+                Add
+              </a>
+            </div>
+
+            {% if form.id_type.errors %}
+              <div class="text-danger small mt-1">
+                {{ form.id_type.errors }}
+              </div>
+            {% endif %}
           </div>
 
           <div class="col-md-6">
-            <label class="form-label">{{ form.issued_country.label }}</label>
-            {{ form.issued_country }}
-            {% if form.issued_country.errors %}<div class="text-danger small">{{ form.issued_country.errors }}</div>{% endif %}
+            <div class="d-flex align-items-center gap-2 justify-content-start">
+              <label class="form-label mb-0" style="min-width: 100px;">
+                Doc number
+              </label>
+
+              <div class="flex-grow-1">
+                {{ form.id_number }}
+              </div>
+            </div>
+
+            {% if form.id_number.errors %}
+              <div class="text-danger small mt-1">
+                {{ form.id_number.errors }}
+              </div>
+            {% endif %}
           </div>
 
-          <div class="col-md-3">
-            <label class="form-label">{{ form.issued_on.label }}</label>
-            {{ form.issued_on }}
-            {% if form.issued_on.errors %}<div class="text-danger small">{{ form.issued_on.errors }}</div>{% endif %}
+          {# ---------- ROW 2 ---------- #}
+
+          <div class="col-md-12">
+            <div class="d-flex align-items-center gap-2 justify-content-start">
+              <label class="form-label mb-0" style="min-width: 120px;">
+                Issued country
+              </label>
+
+              <div class="flex-grow-1">
+                {{ form.issued_country }}
+              </div>
+            </div>
+
+            {% if form.issued_country.errors %}
+              <div class="text-danger small mt-1">
+                {{ form.issued_country.errors }}
+              </div>
+            {% endif %}
           </div>
 
-          <div class="col-md-3">
-            <label class="form-label">{{ form.valid_till.label }}</label>
-            {{ form.valid_till }}
-            {% if form.valid_till.errors %}<div class="text-danger small">{{ form.valid_till.errors }}</div>{% endif %}
+          {# ---------- ROW 3 ---------- #}
+
+          <div class="col-md-6">
+            <div class="d-flex align-items-center gap-2 justify-content-start">
+              <label class="form-label mb-0" style="min-width: 100px;">
+                Issued on
+              </label>
+
+              <div class="flex-grow-1">
+                {{ form.issued_on }}
+              </div>
+            </div>
           </div>
 
-          <div class="col-12">
-            <label class="form-label">{{ form.id_std_sequence.label }}</label>
-            {{ form.id_std_sequence }}
-            {% if form.id_std_sequence.errors %}<div class="text-danger small">{{ form.id_std_sequence.errors }}</div>{% endif %}
+          <div class="col-md-6">
+            <div class="d-flex align-items-center gap-2 justify-content-start">
+              <label class="form-label mb-0" style="min-width: 100px;">
+                Valid till
+              </label>
+
+              <div class="flex-grow-1">
+                {{ form.valid_till }}
+              </div>
+            </div>
           </div>
+
+          {# ---------- ROW 4 ---------- #}
+
+          <div class="col-md-12">
+            <div class="d-flex align-items-center gap-2 justify-content-start">
+              <label class="form-label mb-0" style="min-width: 120px;">
+                MRZ code
+              </label>
+
+              <div class="flex-grow-1">
+                {{ form.id_std_sequence }}
+              </div>
+            </div>
+          </div>
+
         </div>
       </form>
+
+      <script>
+      document.addEventListener("DOMContentLoaded", () => {
+        document
+          .querySelectorAll("#docForm input, #docForm select, #docForm textarea")
+          .forEach((el) => {
+            if (!el.classList.contains("text-center")) {
+              el.classList.add("text-center");
+            }
+            if (
+              el.type !== "checkbox" &&
+              el.type !== "file" &&
+              !el.classList.contains("form-control")
+            ) {
+              el.classList.add("form-control");
+            }
+          });
+      });
+      </script>
 
     </div>
   </div>
 
-  {# --- Scans section with cards --- #}
+  {# ===== Scans section — без изменений ===== #}
   {% if object %}
-    <div class="d-flex justify-content-between align-items-center mb-3">
-      <h2 class="h5">Document Scans</h2>
-
-      {# Add Scan → temporary placeholder #}
+    <div class="d-flex justify-content-between align-items-center mb-2">
+      <h2 class="h5 mb-0">Document Scans</h2>
       <a class="btn btn-sm btn-primary"
          href="{% url 'under_construction' %}">
         Add Scan
       </a>
     </div>
 
-    {% if scans %}
+    {% if scans_page_obj and scans_page_obj.object_list %}
       <div class="row g-3">
-        {% for scan in scans %}
-          <div class="col-md-4">
+        {% for scan in scans_page_obj %}
+          <div class="col-12 col-sm-6 col-md-4">
             <div class="card h-100 shadow-sm">
-
               <div class="ratio ratio-1x1 bg-light">
                 <a href="{{ scan.file.url }}" target="_blank">
                   <img src="{{ scan.file.url }}"
-                       class="card-img-top"
-                       alt="{{ scan.file.name }}">
+                       class="w-100 h-100"
+                       style="object-fit: cover;">
                 </a>
               </div>
-
               <div class="card-body p-2">
                 <div class="small text-truncate">{{ scan.file.name }}</div>
                 <div class="text-muted small">
                   Uploaded: {{ scan.uploaded_at|date:"Y-m-d H:i" }}
                 </div>
               </div>
-
               <div class="card-footer d-flex justify-content-between p-2">
-                <a class="btn btn-sm btn-outline-secondary"
-                   href="{% url 'under_construction' %}">
-                  View
-                </a>
-
-                <a class="btn btn-sm btn-outline-primary"
-                   href="{% url 'under_construction' %}">
-                  Edit
-                </a>
-
+                <a class="btn btn-sm btn-outline-light"
+                   href="{% url 'under_construction' %}">View</a>
+                <a class="btn btn-sm btn-outline-light"
+                   href="{% url 'under_construction' %}">Edit</a>
                 <a class="btn btn-sm btn-outline-danger"
                    href="{% url 'persons:scan_delete' person_obj.pk object.pk scan.pk %}">
                   Delete
                 </a>
               </div>
-
             </div>
           </div>
         {% endfor %}
@@ -140,8 +232,6 @@
       <div class="text-muted">No scans available for this document.</div>
     {% endif %}
   {% endif %}
-  {# --- End scans section --- #}
 
 </div>
-
 {% endblock %}

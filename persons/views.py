@@ -193,15 +193,31 @@ class PersonIDUpdateView(PersonIDBaseMixin, UpdateView):
     template_name = "persons/doc_form.html"
     pk_url_kwarg = "doc_pk"
 
+    SCANS_PER_PAGE = 9
+    SCANS_PAGE_PARAM = "scans_page"
+
     def get_queryset(self):
         return PersonID.objects.filter(person=self.person_obj)
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        # existing scans list for UI
-        ctx["scans"] = PersonIDScan.objects.filter(person_id=self.object).order_by(
+
+        scans_qs = PersonIDScan.objects.filter(person_id=self.object).order_by(
             "-uploaded_at"
         )
+
+        paginator = Paginator(scans_qs, self.SCANS_PER_PAGE)
+        page_number = self.request.GET.get(self.SCANS_PAGE_PARAM) or 1
+        scans_page_obj = paginator.get_page(page_number)
+
+        # main objects for template
+        ctx["scans_page_obj"] = scans_page_obj
+        ctx["scans_is_paginated"] = scans_page_obj.has_other_pages()
+        ctx["scans_page_param"] = self.SCANS_PAGE_PARAM
+
+        # backward compat: if template/code still uses "scans"
+        ctx["scans"] = scans_page_obj.object_list
+
         return ctx
 
     def form_valid(self, form):
