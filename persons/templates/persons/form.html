@@ -27,27 +27,15 @@
 
       <div class="d-flex gap-2 align-items-center flex-wrap">
 
-        {# Photo buttons #}
-        <button type="button" class="btn btn-outline-primary" id="photoPickBtn">
-          {% if object and object.photo %}Replace photo{% else %}Add photo{% endif %}
-        </button>
 
-        <button type="button" class="btn btn-outline-danger" id="photoDeleteBtn">
-          Delete photo
-        </button>
 
         <div class="vr mx-1"></div>
 
         <button type="submit" class="btn btn-primary">
           Save
         </button>
-
         <a href="{% url 'persons:index' %}" class="btn btn-outline-secondary">
           Exit
-        </a>
-
-        <a href="{% url 'persons:create' %}" class="btn btn-success">
-          Add new person
         </a>
       </div>
     </div>
@@ -92,18 +80,25 @@
                    alt="Photo">
             {% else %}
               <img id="photoPreview"
-                   src="{% static 'img/logos/frs_logo.png' %}"
+                   src="{% static 'img/logos/no_img.png' %}"
                    class="img-thumbnail w-100"
                    alt="Placeholder">
             {% endif %}
 
             <!-- filename only -->
             <div class="text-muted small mt-2" id="photoFilename">
-              {% if object and object.photo %}
-                {{ object.photo.name|cut:"persons/photos/" }}
-              {% else %}
-                No photo uploaded
-              {% endif %}
+              {# Photo buttons #}
+              <button type="button"
+                      class="btn btn-outline-primary"
+                      id="photoPickBtn">
+                  {% if object and object.photo %}Replace{% else %}Add{% endif %}
+              </button>
+              <button type="button"
+                      class="btn btn-outline-danger"
+                      id="photoDeleteBtn">
+                  Delete
+              </button>
+
             </div>
 
             <!-- real Django field (keep it, but hide it) -->
