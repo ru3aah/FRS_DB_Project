@@ -42,7 +42,8 @@
 
     <!-- Toast messages -->
     {% if messages %}
-      <div class="toast-container position-fixed top-0 end-0 p-3" style="z-index:1100;">
+      <div class="toast-container position-fixed top-0 end-0 p-3"
+           style="z-index:1100;">
         {% for message in messages %}
           <div class="toast text-bg-success border-0 mb-2" data-bs-delay="2500">
             <div class="d-flex">
@@ -126,21 +127,29 @@
             <div class="mb-3">
               <label class="form-label">First name</label>
               {{ form.first_name }}
-              {% if form.first_name.errors %}<div class="text-danger small">{{ form.first_name.errors }}</div>{% endif %}
+              {% if form.first_name.errors %}
+                  <div class="text-danger small">
+                      {{ form.first_name.errors }}
+                  </div>{% endif %}
             </div>
 
             <div class="mb-3">
               <label class="form-label">Second name</label>
               {{ form.second_name }}
-              {% if form.second_name.errors %}<div class="text-danger small">{{ form.second_name.errors }}</div>{% endif %}
+              {% if form.second_name.errors %}
+                  <div class="text-danger small">
+                      {{ form.second_name.errors }}
+                  </div>{% endif %}
             </div>
 
             <div class="mb-0">
               <label class="form-label">Family name</label>
               {{ form.family_name }}
-              {% if form.family_name.errors %}<div class="text-danger small">{{ form.family_name.errors }}</div>{% endif %}
+              {% if form.family_name.errors %}
+                  <div class="text-danger small">
+                      {{ form.family_name.errors }}
+                  </div>{% endif %}
             </div>
-
           </div>
         </div>
       </div>
@@ -158,26 +167,38 @@
               <div class="col-md-6">
                 <label class="form-label">Date of birth</label>
                 {{ form.dob }}
-                {% if form.dob.errors %}<div class="text-danger small">{{ form.dob.errors }}</div>{% endif %}
+                {% if form.dob.errors %}
+                    <div class="text-danger small">
+                        {{ form.dob.errors }}
+                    </div>{% endif %}
               </div>
 
               <div class="col-md-6">
                 <label class="form-label">Gender</label>
                 {{ form.gender }}
-                {% if form.gender.errors %}<div class="text-danger small">{{ form.gender.errors }}</div>{% endif %}
+                {% if form.gender.errors %}
+                    <div class="text-danger small">
+                        {{ form.gender.errors }}
+                    </div>{% endif %}
               </div>
 
               <div class="col-12">
                 <label class="form-label">Nationality</label>
                 {{ form.nationality }}
-                {% if form.nationality.errors %}<div class="text-danger small">{{ form.nationality.errors }}</div>{% endif %}
+                {% if form.nationality.errors %}
+                    <div class="text-danger small">
+                        {{ form.nationality.errors }}
+                    </div>{% endif %}
               </div>
 
               {# NEW: Local/Expat under nationality #}
               <div class="col-12">
                 <label class="form-label">Residency status</label>
                 {{ form.residency_status }}
-                {% if form.residency_status.errors %}<div class="text-danger small">{{ form.residency_status.errors }}</div>{% endif %}
+                {% if form.residency_status.errors %}
+                    <div class="text-danger small">
+                        {{ form.residency_status.errors }}
+                    </div>{% endif %}
               </div>
 
             </div>
@@ -305,7 +326,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const delBtn = document.getElementById("photoDeleteBtn");
 
   // Django clear checkbox (only exists when editing existing photo)
-  const clearCheckbox = document.querySelector('input[type="checkbox"][name="photo-clear"]');
+  const clearCheckbox = document.querySelector
+  ('input[type="checkbox"][name="photo-clear"]');
 
   const setPreviewFromFile = (file) => {
     if (!file) return;
