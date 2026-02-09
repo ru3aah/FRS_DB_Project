@@ -1,6 +1,8 @@
 from django.db import models
+from django.db.models import Q
 
 from companies.models import Company
+from persons.models import Person
 
 
 class Position(models.Model):
@@ -265,3 +267,107 @@ class StaffingPlanItem(models.Model):
 
     def __str__(self) -> str:
         return f"{self.staffing_plan} | {self.position} x {self.position_qty} | {self.shift_type}"
+
+
+# =========================
+# Employment / Assignments
+# =========================
+
+
+class StaffEmployment(models.Model):
+    """
+    Marks that a Person is hired by Company (employment history).
+    """
+
+    employment_id = models.BigAutoField(primary_key=True)
+
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name="staff_employments",
+    )
+
+    person = models.ForeignKey(
+        Person,
+        on_delete=models.CASCADE,
+        related_name="employments",
+    )
+
+    hired_on = models.DateField(blank=True, null=True)
+    terminated_on = models.DateField(blank=True, null=True)
+
+    is_active = models.BooleanField(
+        default=True,
+        help_text="Active employment (person is currently hired by this company).",
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "staff_employments"
+        # FIX: person_id не поле модели; сортируем по FK person
+        ordering = ["-is_active", "company", "person"]
+        constraints = [
+            # FIX: разрешаем историю, но запрещаем >1 активного employment для (company, person)
+            models.UniqueConstraint(
+                fields=["company", "person"],
+                condition=Q(is_active=True),
+                name="uq_staff_employment_company_person_active",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.person} @ {self.company} ({'active' if self.is_active else 'inactive'})"
+
+
+class StaffingAssignment(models.Model):
+    """
+    Occupies a slot inside a StaffingPlanItem with a concrete Person.
+
+    'Occupied' is derived:
+      occupied_count = assignments.filter(is_active=True).count()
+      vacant_count   = position_qty - occupied_count
+    """
+
+    staffing_assignment_id = models.BigAutoField(primary_key=True)
+
+    staffing_plan_item = models.ForeignKey(
+        StaffingPlanItem,
+        on_delete=models.CASCADE,
+        related_name="assignments",
+    )
+
+    person = models.ForeignKey(
+        Person,
+        on_delete=models.PROTECT,
+        related_name="staffing_assignments",
+    )
+
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name="staffing_assignments",
+        help_text="Redundant but удобный фильтр и контроль консистентности.",
+    )
+
+    is_active = models.BooleanField(default=True)
+
+    assigned_at = models.DateTimeField(auto_now_add=True)
+    released_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        db_table = "staff_staffing_assignments"
+        ordering = ["-is_active", "-assigned_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["staffing_plan_item", "person"],
+                name="uq_staffing_assignment_item_person",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return (
+            f"{self.person} -> {self.staffing_plan_item} ("
+            f"{'active' if self.is_active else 'inactive'})"
+        )

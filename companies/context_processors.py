@@ -6,17 +6,10 @@ from companies.models import Company
 
 
 def active_company_and_person(request) -> dict[str, Any]:
-    """
-    Adds active company (from session) and linked person to every template context.
-
-    - company: Company | None
-    - person: Person | None
-    """
     user = getattr(request, "user", None)
 
     person = None
     if user and getattr(user, "is_authenticated", False):
-        # CustomUser.person is optional; avoid RelatedObjectDoesNotExist
         person = getattr(user, "person", None)
 
     company = None

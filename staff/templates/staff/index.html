@@ -29,8 +29,6 @@
             </a>
         </div>
 
-
-
         <!-- Shifts -->
         <div class="col-md-3">
             <a href="{% url 'staff:shifts_list' %}"
@@ -49,6 +47,17 @@
                 <div class="card-body text-center">
                     <h5 class="card-title">Staffing Plan</h5>
                     <p class="card-text text-muted">Plan shifts and positions</p>
+                </div>
+            </a>
+        </div>
+
+        <!-- Assignments -->
+        <div class="col-md-3">
+            <a href="{% url 'staff:assignments' %}"
+               class="card text-decoration-none h-100 shadow-sm">
+                <div class="card-body text-center">
+                    <h5 class="card-title">Assignments</h5>
+                    <p class="card-text text-muted">Assign people to plan slots</p>
                 </div>
             </a>
         </div>

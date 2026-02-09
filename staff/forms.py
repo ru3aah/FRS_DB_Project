@@ -1,12 +1,24 @@
+from __future__ import annotations
+
+from datetime import date
+
 from django import forms
+from django.core.exceptions import ValidationError
 from django.forms import inlineformset_factory
 
-from .models import Position, ShiftType, Shift, StaffingPlan, StaffingPlanItem
+from persons.models import Person
+
+from .models import (
+    Position,
+    ShiftType,
+    Shift,
+    StaffingPlan,
+    StaffingPlanItem,
+    StaffEmployment,
+    StaffingAssignment,
+)
 
 
-# -------------------------
-# Positions
-# -------------------------
 class PositionForm(forms.ModelForm):
     class Meta:
         model = Position
@@ -19,9 +31,6 @@ class PositionForm(forms.ModelForm):
         }
 
 
-# -------------------------
-# Shift Types
-# -------------------------
 class ShiftTypeForm(forms.ModelForm):
     class Meta:
         model = ShiftType
@@ -45,9 +54,6 @@ class ShiftTypeForm(forms.ModelForm):
         }
 
 
-# -------------------------
-# Shifts
-# -------------------------
 class ShiftForm(forms.ModelForm):
     class Meta:
         model = Shift
@@ -59,9 +65,6 @@ class ShiftForm(forms.ModelForm):
         }
 
 
-# -------------------------
-# Staffing plan
-# -------------------------
 class StaffingPlanForm(forms.ModelForm):
     class Meta:
         model = StaffingPlan
@@ -88,6 +91,72 @@ StaffingPlanItemFormSet = inlineformset_factory(
     StaffingPlan,
     StaffingPlanItem,
     form=StaffingPlanItemForm,
-    extra=0,  # строки добавляем кнопкой (JS)
+    extra=0,
     can_delete=True,
 )
+
+
+class AssignmentCreateForm(forms.Form):
+    person = forms.ModelChoiceField(
+        queryset=Person.objects.none(),
+        widget=forms.Select(attrs={"class": "form-select"}),
+        empty_label="Select person…",
+        required=True,
+    )
+
+    def __init__(
+        self, *args, company=None, item: StaffingPlanItem | None = None, **kwargs
+    ):
+        super().__init__(*args, **kwargs)
+        self.company = company
+        self.item = item
+        self.fields["person"].queryset = Person.objects.all().order_by(
+            "family_name", "first_name"
+        )
+
+    def clean(self):
+        cleaned = super().clean()
+        person: Person | None = cleaned.get("person")
+
+        if self.company is None or self.item is None or person is None:
+            return cleaned
+
+        occupied = StaffingAssignment.objects.filter(
+            staffing_plan_item=self.item, is_active=True
+        ).count()
+        if occupied >= self.item.position_qty:
+            raise ValidationError("No vacant slots for this position/shift type.")
+
+        if StaffingAssignment.objects.filter(
+            staffing_plan_item=self.item, person=person, is_active=True
+        ).exists():
+            raise ValidationError("This person is already assigned to this slot.")
+
+        return cleaned
+
+    def save(self) -> StaffingAssignment:
+        if self.company is None or self.item is None:
+            raise ValueError("company and item are required")
+
+        person: Person = self.cleaned_data["person"]
+
+        # Employment: update_or_create (не затираем hired_on если уже есть)
+        emp, created = StaffEmployment.objects.update_or_create(
+            company=self.company,
+            person=person,
+            defaults={"is_active": True, "terminated_on": None},
+        )
+        if created and emp.hired_on is None:
+            emp.hired_on = date.today()
+            emp.save(update_fields=["hired_on"])
+        elif (not created) and emp.hired_on is None:
+            emp.hired_on = date.today()
+            emp.save(update_fields=["hired_on"])
+
+        # Assignment: update_or_create по UNIQUE(item, person)
+        assignment, _ = StaffingAssignment.objects.update_or_create(
+            staffing_plan_item=self.item,
+            person=person,
+            defaults={"company": self.company, "is_active": True, "released_at": None},
+        )
+        return assignment

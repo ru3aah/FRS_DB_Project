@@ -3,38 +3,22 @@ from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# =====================================================
-# Core
-# =====================================================
-
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "dev-secret-key")
-
 DEBUG = os.getenv("DJANGO_DEBUG", "True") == "True"
-
 ALLOWED_HOSTS = ["*"]
 
-# =====================================================
-# Applications
-# =====================================================
-
 INSTALLED_APPS = [
-    # Django default apps
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
-    # Local apps
     "companies",
     "persons",
     "users",
     "staff",
 ]
-
-# =====================================================
-# Middleware
-# =====================================================
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
@@ -44,13 +28,8 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
-    # Custom middleware
     "companies.middleware.ActiveCompanyRequiredMiddleware",
 ]
-
-# =====================================================
-# URLs / Templates
-# =====================================================
 
 ROOT_URLCONF = "FireService_DB.urls"
 
@@ -73,16 +52,10 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "FireService_DB.wsgi.application"
 
-# =====================================================
-# Database auto-switch logic
-# =====================================================
-
 
 def _running_in_docker() -> bool:
-    # Явный флаг из docker-compose
     if os.getenv("IN_DOCKER") == "1":
         return True
-    # Стандартный маркер Docker
     return os.path.exists("/.dockerenv")
 
 
@@ -90,7 +63,6 @@ IN_DOCKER = _running_in_docker()
 POSTGRES_HOST = os.getenv("POSTGRES_HOST")
 
 if IN_DOCKER or POSTGRES_HOST:
-    # Docker или явный запрос Postgres
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.postgresql",
@@ -102,7 +74,6 @@ if IN_DOCKER or POSTGRES_HOST:
         }
     }
 else:
-    # Локальный dev по умолчанию
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.sqlite3",
@@ -110,9 +81,7 @@ else:
         }
     }
 
-# =====================================================
-# Auth / Passwords
-# =====================================================
+AUTH_USER_MODEL = "users.CustomUser"
 
 AUTH_PASSWORD_VALIDATORS = [
     {
@@ -123,38 +92,24 @@ AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
 ]
 
-AUTH_USER_MODEL = "users.CustomUser"
+# ВАЖНО: чтобы не уходило на /accounts/profile/
+LOGIN_URL = "/users/login/"
+LOGIN_REDIRECT_URL = "/main/"
+LOGOUT_REDIRECT_URL = "/"
 
-# =====================================================
-# CSRF / Reverse proxy (nginx https -> gunicorn http)
-# =====================================================
-
-# Разрешаем корректную CSRF-проверку при HTTPS через nginx
 CSRF_TRUSTED_ORIGINS = [
     "https://localhost",
     "https://127.0.0.1",
     "http://localhost",
     "http://127.0.0.1",
 ]
-
-# Django должен понимать, что исходно запрос пришёл по HTTPS
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
-
-# Учитывать Host, который передал прокси (nginx)
 USE_X_FORWARDED_HOST = True
-
-# =====================================================
-# I18N / TZ
-# =====================================================
 
 LANGUAGE_CODE = "en-us"
 TIME_ZONE = "UTC"
 USE_I18N = True
 USE_TZ = True
-
-# =====================================================
-# Static / Media
-# =====================================================
 
 STATIC_URL = "/static/"
 STATICFILES_DIRS = [BASE_DIR / "static"]
@@ -162,9 +117,5 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
-
-# =====================================================
-# Defaults
-# =====================================================
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"

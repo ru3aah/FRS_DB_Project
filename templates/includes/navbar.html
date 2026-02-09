@@ -3,81 +3,107 @@
 <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
   <div class="container-fluid">
 
+    {# Left: system logo (square) #}
     <a class="navbar-brand d-flex align-items-center" href="{% url 'main' %}">
-      {# System logo — always first #}
-      <img src="{% static 'img/logos/frs_logo.png' %}" alt="FRS" height="40" class="me-2">
-
-      {# Company logo if available #}
-      {% if company and company.logo %}
-        <img src="{{ company.logo.url }}" alt="Company logo" height="40" class="me-2">
-      {% endif %}
-
-      <strong>
-        {% if company %}
-          {{ company.name_short|default:company.name }}
-        {% else %}
-          FRS DB
-        {% endif %}
-      </strong>
+      <img
+        src="{% static 'img/logos/frs_logo.jpg' %}"
+        alt="FRS logo"
+        width="32"
+        height="32"
+        class="rounded-1"
+        style="object-fit: cover;"
+      >
     </a>
 
-    <button class="navbar-toggler"
-            type="button"
+    <button class="navbar-toggler" type="button"
             data-bs-toggle="collapse"
-            data-bs-target="#mainNavbar"
-            aria-controls="mainNavbar"
+            data-bs-target="#navbarMain"
+            aria-controls="navbarMain"
             aria-expanded="false"
             aria-label="Toggle navigation">
       <span class="navbar-toggler-icon"></span>
     </button>
 
-    <div class="collapse navbar-collapse" id="mainNavbar">
-      <ul class="navbar-nav ms-auto align-items-center">
+    <div class="collapse navbar-collapse" id="navbarMain">
 
-        {% if request.user.is_superuser or perms.persons.hr_manager %}
-          <li class="nav-item dropdown me-3">
-            <a class="nav-link dropdown-toggle text-white"
-               href="#"
-               id="hrDropdown"
-               role="button"
-               data-bs-toggle="dropdown"
-               aria-expanded="false">
-              HR
-            </a>
-
-            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="hrDropdown">
-              <li>
-                <a class="dropdown-item" href="{% url 'persons:index' %}">
-                  Persons
-                </a>
-              </li>
-              <li>
-                <a class="dropdown-item" href="{% url 'staff:index' %}">
-                  Staff
-                </a>
-              </li>
-            </ul>
+      {# Main menu #}
+      <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+          <li class="nav-item">
+              <a class="nav-link"
+                 aria-current="page"
+                 href="{% url 'admin:index' %}">Admin</a>
           </li>
-        {% endif %}
-
-        <li class="nav-item text-white me-3">
-          {% if person %}
-            {{ person.first_name }} {{ person.second_name }} {{ person.family_name }}
-          {% else %}
-            {{ request.user.email }}
-          {% endif %}
-        </li>
-
-        <li class="nav-item">
-          <form method="post" action="{% url 'users:logout' %}" class="m-0 p-0">
-            {% csrf_token %}
-            <button class="btn btn-outline-light btn-sm" type="submit">
-              Logout
-            </button>
-          </form>
+          <li class="nav-item dropdown">
+              <a class="nav-link dropdown-toggle"
+                 href="#"
+                 id="hrDropdown"
+                 role="button"
+                 data-bs-toggle="dropdown"
+                 aria-expanded="false">
+                  HR
+              </a>
+              <ul class="dropdown-menu dropdown-menu-dark bg-primary">
+                  <li>
+              <a class="dropdown-item" href="{% url 'persons:index' %}">
+                Persons
+              </a>
+            </li>
+            <li>
+              <a class="dropdown-item" href="{% url 'staff:index' %}">
+                Staff
+              </a>
+            </li>
+          </ul>
         </li>
 
       </ul>
+
+      {# Right side #}
+      {% if user.is_authenticated %}
+        <div class="d-flex align-items-center gap-3">
+
+          {# User full name (from user.person only) #}
+          {% if user.person %}
+            <div class="text-end lh-sm">
+              <div class="text-light small text-md-center">
+                {{ user.person.first_name }}
+              </div>
+              <div class="text-light small text-md-center">
+                  {{ user.person.second_name }} {{ user.person.family_name }}
+              </div>
+            </div>
+          {% endif %}
+
+          {# Logout #}
+          <form method="post"
+                action="{% url 'users:logout' %}"
+                class="m-0">
+            {% csrf_token %}
+            <button class="btn btn-sm btn-outline-light" type="submit">
+              Logout
+            </button>
+          </form>
+
+          {# Company (ONLY if logo exists) #}
+          {% if company and company.logo %}
+            <div class="d-flex align-items-center gap-2">
+              <span class="text-light small">
+                {{ company.name_short }}
+              </span>
+              <img
+                src="{{ company.logo.url }}"
+                alt="Company logo"
+                width="32"
+                height="32"
+                class="rounded-circle"
+                style="object-fit: cover;"
+              >
+            </div>
+          {% endif %}
+
+        </div>
+      {% endif %}
+
     </div>
   </div>
 </nav>

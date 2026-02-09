@@ -1,43 +1,43 @@
-from django.contrib.auth import logout
+from __future__ import annotations
+
+from django.contrib import messages
 from django.contrib.auth.views import LoginView, LogoutView
-from django.http import HttpResponseNotAllowed, HttpResponseRedirect
+from django.shortcuts import redirect
 from django.urls import reverse_lazy
 
-from .forms import CustomLoginForm
+from companies.models import CompanyMembership
+from .forms import EmailCompanyAuthenticationForm
 
 
 class CustomLoginView(LoginView):
     template_name = "users/login.html"
-    authentication_form = CustomLoginForm
-
-    redirect_authenticated_user = False
-
-    def get_success_url(self):
-        return reverse_lazy("main")
-
-    def dispatch(self, request, *args, **kwargs):
-        if request.user.is_authenticated and request.session.get("active_company_id"):
-            return HttpResponseRedirect(self.get_success_url())
-        return super().dispatch(request, *args, **kwargs)
+    authentication_form = EmailCompanyAuthenticationForm
 
     def form_valid(self, form):
-        response = super().form_valid(form)
+        user = form.get_user()
         company = form.cleaned_data["company"]
+
+        if not getattr(user, "is_superuser", False):
+            ok = CompanyMembership.objects.filter(
+                user=user, company=company, is_active=True
+            ).exists()
+            if not ok:
+                form.add_error("company", "You do not have access to this company.")
+                return self.form_invalid(form)
+
         self.request.session["active_company_id"] = company.id
-        return response
+        messages.success(self.request, "Welcome!")
+        return super().form_valid(form)
 
 
 class CustomLogoutView(LogoutView):
-    """
-    Logout только через POST.
-    Дополнительно чистим active_company_id.
-    """
-
     next_page = reverse_lazy("home")
 
     def get(self, request, *args, **kwargs):
-        return HttpResponseNotAllowed(["POST"])
+        # logout только POST; GET просто на home
+        return redirect("home")
 
     def post(self, request, *args, **kwargs):
         request.session.pop("active_company_id", None)
+        messages.info(request, "Logged out.")
         return super().post(request, *args, **kwargs)

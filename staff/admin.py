@@ -1,6 +1,14 @@
 from django.contrib import admin
 
-from .models import Position, Shift, ShiftType, StaffingPlan, StaffingPlanItem
+from .models import (
+    Position,
+    Shift,
+    ShiftType,
+    StaffingPlan,
+    StaffingPlanItem,
+    StaffEmployment,
+    StaffingAssignment,
+)
 
 
 @admin.register(Position)
@@ -75,3 +83,36 @@ class StaffingPlanAdmin(admin.ModelAdmin):
     ordering = ("company", "-is_active", "-updated_at")
     readonly_fields = ("created_at", "updated_at")
     inlines = [StaffingPlanItemInline]
+
+
+@admin.register(StaffEmployment)
+class StaffEmploymentAdmin(admin.ModelAdmin):
+    list_display = (
+        "employment_id",
+        "company",
+        "person",
+        "is_active",
+        "hired_on",
+        "terminated_on",
+        "updated_at",
+    )
+    list_filter = ("company", "is_active")
+    search_fields = ("person__first_name", "person__family_name", "company__name")
+    ordering = ("company", "-is_active", "person")
+    readonly_fields = ("created_at", "updated_at")
+
+
+@admin.register(StaffingAssignment)
+class StaffingAssignmentAdmin(admin.ModelAdmin):
+    list_display = (
+        "staffing_assignment_id",
+        "company",
+        "staffing_plan_item",
+        "person",
+        "is_active",
+        "assigned_at",
+        "released_at",
+    )
+    list_filter = ("company", "is_active")
+    search_fields = ("person__first_name", "person__family_name")
+    ordering = ("company", "-is_active", "-assigned_at")

@@ -23,6 +23,10 @@ from .views import (
     StaffingPlanCreateView,
     StaffingPlanUpdateView,
     StaffingPlanDeactivateView,
+    # Assignments
+    AssignmentsView,
+    AssignmentCreateView,
+    AssignmentReleaseView,
 )
 
 app_name = "staff"
@@ -89,5 +93,19 @@ urlpatterns = [
         "staffing-plans/<int:pk>/delete/",
         StaffingPlanDeactivateView.as_view(),
         name="staffing_plans_delete",
+    ),
+    # -----------------
+    # Assignments
+    # -----------------
+    path("assignments/", AssignmentsView.as_view(), name="assignments"),
+    path(
+        "assignments/item/<int:item_pk>/assign/",
+        AssignmentCreateView.as_view(),
+        name="assignment_add",
+    ),
+    path(
+        "assignments/<int:assignment_pk>/release/",
+        AssignmentReleaseView.as_view(),
+        name="assignment_release",
     ),
 ]
