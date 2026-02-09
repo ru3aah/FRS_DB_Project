@@ -204,6 +204,13 @@ class PersonIDScan(models.Model):
         related_name="scans",
     )
 
+    scan_name = models.CharField(
+        max_length=50,
+        blank=True,
+        null=True,
+        help_text="Optional scan name (shown in UI)",
+    )
+
     file = models.FileField(
         upload_to="persons/ids/scans/",
         help_text="Uploaded document scan (PDF/JPEG/PNG)",

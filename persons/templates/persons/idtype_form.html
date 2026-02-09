@@ -14,8 +14,12 @@
   <div class="card">
     <div class="card-body">
 
-      <form method="post" novalidate>
+      {# IMPORTANT: preserve querystring (?next=...) on POST #}
+      <form method="post" novalidate action="{{ request.get_full_path }}">
         {% csrf_token %}
+
+        {# IMPORTANT: keep next for POST handler too #}
+        <input type="hidden" name="next" value="{{ request.GET.next|default:'' }}">
 
         {% if form.non_field_errors %}
           <div class="alert alert-danger">
@@ -55,7 +59,12 @@
 
         <div class="d-flex gap-2 mt-4">
           <button type="submit" class="btn btn-primary">Save</button>
-          <a href="{% url 'persons:index' %}" class="btn btn-secondary">Close</a>
+
+          {# Close should return to caller (doc form) #}
+          <a href="{{ request.GET.next|default:request.META.HTTP_REFERER|default:'#' }}"
+             class="btn btn-secondary">
+            Close
+          </a>
         </div>
       </form>
 
@@ -67,7 +76,6 @@
 document.addEventListener("DOMContentLoaded", () => {
   const fields = document.querySelectorAll("input, select, textarea");
   fields.forEach((el) => {
-    // Don't force form-control on checkbox
     if (el.type === "checkbox") return;
     if (!el.classList.contains("form-control")) {
       el.classList.add("form-control");

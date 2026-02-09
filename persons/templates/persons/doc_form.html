@@ -70,8 +70,9 @@
                 {{ form.id_type }}
               </div>
 
+              {# FIX: pass next back to this doc form #}
               <a class="btn btn-sm btn-outline-secondary"
-                 href="{% url 'persons:idtype_create' %}">
+                 href="{% url 'persons:idtype_create' %}?next={{ request.get_full_path|urlencode }}">
                 Add
               </a>
             </div>
