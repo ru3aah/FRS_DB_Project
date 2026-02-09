@@ -1,4 +1,3 @@
-{# templates/persons/doc_form.html #}
 {% extends "base.html" %}
 {% load static %}
 
@@ -11,23 +10,6 @@
 
 <div class="container mt-4" style="max-width: 1100px;">
 
-  {# Toasts #}
-  {% if messages %}
-    <div class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 1100;">
-      {% for message in messages %}
-        <div class="toast align-items-center text-bg-success border-0 mb-2"
-             role="alert" aria-live="assertive" aria-atomic="true"
-             data-bs-delay="2500">
-          <div class="d-flex">
-            <div class="toast-body">{{ message }}</div>
-            <button type="button" class="btn-close btn-close-white me-2 m-auto"
-                    data-bs-dismiss="toast" aria-label="Close"></button>
-          </div>
-        </div>
-      {% endfor %}
-    </div>
-  {% endif %}
-
   <div class="d-flex justify-content-between align-items-start mb-3">
     <div>
       <h1 class="h4 mb-0">
@@ -39,7 +21,6 @@
       {% endif %}
     </div>
 
-    {# Buttons in header #}
     <div class="d-flex gap-2">
       <button type="submit" form="docForm" class="btn btn-primary">Save</button>
       <a class="btn btn-outline-secondary"
@@ -49,7 +30,7 @@
     </div>
   </div>
 
-  <div class="card shadow-sm">
+  <div class="card shadow-sm mb-4">
     <div class="card-body">
 
       <form id="docForm" method="post" enctype="multipart/form-data" novalidate>
@@ -60,16 +41,8 @@
         {% endif %}
 
         <div class="row g-3">
-
           <div class="col-md-6">
-            <label class="form-label d-flex justify-content-between align-items-center">
-              <span>{{ form.id_type.label }}</span>
-              <a class="btn btn-sm btn-outline-secondary"
-                 href="{% url 'persons:idtype_create' %}?next={{ request.get_full_path|urlencode }}"
-                 target="_blank">
-                Add
-              </a>
-            </label>
+            <label class="form-label">{{ form.id_type.label }}</label>
             {{ form.id_type }}
             {% if form.id_type.errors %}<div class="text-danger small">{{ form.id_type.errors }}</div>{% endif %}
           </div>
@@ -103,196 +76,72 @@
             {{ form.id_std_sequence }}
             {% if form.id_std_sequence.errors %}<div class="text-danger small">{{ form.id_std_sequence.errors }}</div>{% endif %}
           </div>
-
-          {# Scans area #}
-          <div class="col-12 mt-2">
-            <label class="form-label">{{ form.scans.label }}</label>
-
-            <div id="dropZone"
-                 class="border rounded p-4 text-center bg-light"
-                 style="cursor:pointer;">
-              <div class="text-muted">Drag & drop scans here</div>
-            </div>
-
-            <div class="mt-2 d-flex gap-2">
-              <button type="button" class="btn btn-outline-primary btn-sm" id="chooseScansBtn">
-                Choose scans
-              </button>
-              <button type="button" class="btn btn-outline-secondary btn-sm" id="clearSelectedBtn">
-                Clear selected
-              </button>
-            </div>
-
-            {# Keep input in DOM, do not display:none #}
-            <div class="visually-hidden">
-              {{ form.scans }}
-            </div>
-
-            <div class="form-text mt-2">{{ form.scans.help_text }}</div>
-            {% if form.scans.errors %}<div class="text-danger small mt-1">{{ form.scans.errors }}</div>{% endif %}
-          </div>
         </div>
-
-        <div class="row mt-4 g-3">
-          <div class="col-lg-6">
-            <div class="card h-100">
-              <div class="card-header fw-semibold">Existing scans</div>
-              <div class="card-body">
-                {% if object %}
-                  {% if scans %}
-                    <ul class="list-group list-group-flush">
-                      {% for s in scans %}
-                        <li class="list-group-item d-flex justify-content-between align-items-center">
-                          <div class="me-3 text-truncate" style="max-width: 520px;">
-                            <a href="{{ s.file.url }}" target="_blank" class="text-decoration-none">
-                              {{ s.file.name }}
-                            </a>
-                            <div class="small text-muted">
-                              Uploaded: {{ s.uploaded_at }}
-                            </div>
-                          </div>
-                          <a class="btn btn-sm btn-outline-danger"
-                             href="{% url 'persons:scan_delete' person_obj.pk object.pk s.pk %}">
-                            Delete
-                          </a>
-                        </li>
-                      {% endfor %}
-                    </ul>
-                  {% else %}
-                    <div class="text-muted">No scans yet (placeholder).</div>
-                  {% endif %}
-                {% else %}
-                  <div class="text-muted">Save the document first to upload scans.</div>
-                {% endif %}
-              </div>
-            </div>
-          </div>
-
-          <div class="col-lg-6">
-            <div class="card h-100">
-              <div class="card-header fw-semibold">Selected (will be uploaded on Save)</div>
-              <div class="card-body">
-                <div id="selectedPlaceholder" class="text-muted">No files selected.</div>
-                <ul id="selectedList" class="list-group list-group-flush d-none"></ul>
-                <div class="small text-muted mt-2">
-                  Files appear here immediately. They are uploaded only when you click <strong>Save</strong>.
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
       </form>
 
     </div>
   </div>
+
+  {# --- Scans section with cards --- #}
+  {% if object %}
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h2 class="h5">Document Scans</h2>
+
+      {# Add Scan → temporary placeholder #}
+      <a class="btn btn-sm btn-primary"
+         href="{% url 'under_construction' %}">
+        Add Scan
+      </a>
+    </div>
+
+    {% if scans %}
+      <div class="row g-3">
+        {% for scan in scans %}
+          <div class="col-md-4">
+            <div class="card h-100 shadow-sm">
+
+              <div class="ratio ratio-1x1 bg-light">
+                <a href="{{ scan.file.url }}" target="_blank">
+                  <img src="{{ scan.file.url }}"
+                       class="card-img-top"
+                       alt="{{ scan.file.name }}">
+                </a>
+              </div>
+
+              <div class="card-body p-2">
+                <div class="small text-truncate">{{ scan.file.name }}</div>
+                <div class="text-muted small">
+                  Uploaded: {{ scan.uploaded_at|date:"Y-m-d H:i" }}
+                </div>
+              </div>
+
+              <div class="card-footer d-flex justify-content-between p-2">
+                <a class="btn btn-sm btn-outline-secondary"
+                   href="{% url 'under_construction' %}">
+                  View
+                </a>
+
+                <a class="btn btn-sm btn-outline-primary"
+                   href="{% url 'under_construction' %}">
+                  Edit
+                </a>
+
+                <a class="btn btn-sm btn-outline-danger"
+                   href="{% url 'persons:scan_delete' person_obj.pk object.pk scan.pk %}">
+                  Delete
+                </a>
+              </div>
+
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="text-muted">No scans available for this document.</div>
+    {% endif %}
+  {% endif %}
+  {# --- End scans section --- #}
+
 </div>
-
-<script>
-document.addEventListener("DOMContentLoaded", () => {
-  // toasts
-  const toastElList = [].slice.call(document.querySelectorAll(".toast"));
-  toastElList.forEach((toastEl) => new bootstrap.Toast(toastEl).show());
-
-  // bootstrap inputs (exclude file)
-  const fields = document.querySelectorAll("input:not([type=file]), select, textarea");
-  fields.forEach((el) => el.classList.add("form-control"));
-
-  const dropZone = document.getElementById("dropZone");
-  const chooseBtn = document.getElementById("chooseScansBtn");
-  const clearBtn = document.getElementById("clearSelectedBtn");
-
-  const input = document.querySelector('input[type="file"][name="scans"]');
-  const selectedList = document.getElementById("selectedList");
-  const selectedPlaceholder = document.getElementById("selectedPlaceholder");
-
-  if (!input) return;
-
-  function renderSelected() {
-    const files = input.files ? Array.from(input.files) : [];
-    if (!files.length) {
-      selectedPlaceholder.classList.remove("d-none");
-      selectedList.classList.add("d-none");
-      selectedList.innerHTML = "";
-      return;
-    }
-
-    selectedPlaceholder.classList.add("d-none");
-    selectedList.classList.remove("d-none");
-    selectedList.innerHTML = "";
-
-    files.forEach((f, idx) => {
-      const li = document.createElement("li");
-      li.className = "list-group-item d-flex justify-content-between align-items-center";
-
-      const left = document.createElement("div");
-      left.className = "me-3 text-truncate";
-      left.style.maxWidth = "520px";
-      left.textContent = f.name;
-
-      const right = document.createElement("button");
-      right.type = "button";
-      right.className = "btn btn-sm btn-outline-danger";
-      right.textContent = "Remove";
-
-      right.addEventListener("click", () => {
-        const current = input.files ? Array.from(input.files) : [];
-        const dt = new DataTransfer();
-        current.forEach((file, i) => { if (i !== idx) dt.items.add(file); });
-        input.files = dt.files;
-        renderSelected();
-      });
-
-      li.appendChild(left);
-      li.appendChild(right);
-      selectedList.appendChild(li);
-    });
-  }
-
-  function addFiles(newFiles) {
-    const current = input.files ? Array.from(input.files) : [];
-    const dt = new DataTransfer();
-
-    current.forEach(f => dt.items.add(f));
-    Array.from(newFiles).forEach(f => dt.items.add(f));
-
-    input.files = dt.files;
-    renderSelected();
-  }
-
-  chooseBtn?.addEventListener("click", () => input.click());
-
-  clearBtn?.addEventListener("click", () => {
-    input.value = "";
-    renderSelected();
-  });
-
-  input.addEventListener("change", () => {
-    // selection replaces; still ok, because user expects list to reflect chosen files
-    renderSelected();
-  });
-
-  const preventDefaults = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-  };
-
-  ["dragenter", "dragover", "dragleave", "drop"].forEach((evt) => {
-    dropZone?.addEventListener(evt, preventDefaults, false);
-  });
-
-  dropZone?.addEventListener("dragover", () => dropZone.classList.add("border-primary"));
-  dropZone?.addEventListener("dragleave", () => dropZone.classList.remove("border-primary"));
-
-  dropZone?.addEventListener("drop", (e) => {
-    dropZone.classList.remove("border-primary");
-    if (e.dataTransfer?.files?.length) {
-      addFiles(e.dataTransfer.files);
-    }
-  });
-
-  renderSelected();
-});
-</script>
 
 {% endblock %}
