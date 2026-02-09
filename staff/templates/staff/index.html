@@ -1,70 +1,69 @@
 {% extends "base.html" %}
 
-{% block title %}FRS DB | Staff{% endblock %}
+{% block title %}Staff | FRS DB{% endblock %}
 
 {% block content %}
 {% include "includes/navbar.html" %}
 
 <div class="container mt-4">
 
-  <div class="mb-3">
-    <h1 class="h4 mb-0">Staff</h1>
-    <div class="text-muted small">
-      HR staff management section
-    </div>
-  </div>
-
-  <div class="row g-3">
-
-    <div class="col-md-3">
-      <a href="{% url 'under_construction' %}"
-         class="card text-decoration-none h-100 shadow-sm">
-        <div class="card-body text-center">
-          <div class="fw-semibold">Positions</div>
-          <div class="text-muted small mt-1">
-            Job positions & roles
-          </div>
+    <div class="row text-center mb-4">
+        <div class="col">
+            <img src="/static/img/logos/frs_logo.png"
+                 alt="FRS logo"
+                 class="img-fluid"
+                 width="180">
         </div>
-      </a>
     </div>
 
-    <div class="col-md-3">
-      <a href="{% url 'under_construction' %}"
-         class="card text-decoration-none h-100 shadow-sm">
-        <div class="card-body text-center">
-          <div class="fw-semibold">Staffing plan</div>
-          <div class="text-muted small mt-1">
-            Manpower planning
-          </div>
+    <div class="row g-4">
+
+        <!-- Positions -->
+        <div class="col-md-3">
+            <a href="{% url 'staff:positions_list' %}"
+               class="card text-decoration-none h-100 shadow-sm">
+                <div class="card-body text-center">
+                    <h5 class="card-title">Positions</h5>
+                    <p class="card-text text-muted">Manage staff positions</p>
+                </div>
+            </a>
         </div>
-      </a>
-    </div>
 
-    <div class="col-md-3">
-      <a href="{% url 'under_construction' %}"
-         class="card text-decoration-none h-100 shadow-sm">
-        <div class="card-body text-center">
-          <div class="fw-semibold">Shifts</div>
-          <div class="text-muted small mt-1">
-            Shift schedules
-          </div>
+
+
+        <!-- Shifts -->
+        <div class="col-md-3">
+            <a href="{% url 'staff:shifts_list' %}"
+               class="card text-decoration-none h-100 shadow-sm">
+                <div class="card-body text-center">
+                    <h5 class="card-title">Shifts</h5>
+                    <p class="card-text text-muted">Shift configuration</p>
+                </div>
+            </a>
         </div>
-      </a>
-    </div>
 
-    <div class="col-md-3">
-      <a href="{% url 'under_construction' %}"
-         class="card text-decoration-none h-100 shadow-sm">
-        <div class="card-body text-center">
-          <div class="fw-semibold">Staff</div>
-          <div class="text-muted small mt-1">
-            Staff members
-          </div>
+        <!-- Staffing plan -->
+        <div class="col-md-3">
+            <a href="{% url 'staff:staffing_plans_list' %}"
+               class="card text-decoration-none h-100 shadow-sm">
+                <div class="card-body text-center">
+                    <h5 class="card-title">Staffing Plan</h5>
+                    <p class="card-text text-muted">Plan shifts and positions</p>
+                </div>
+            </a>
         </div>
-      </a>
+
+        <!-- Staff -->
+        <div class="col-md-3">
+            <a href="{% url 'under_construction' %}"
+               class="card text-decoration-none h-100 shadow-sm">
+                <div class="card-body text-center">
+                    <h5 class="card-title">Staff</h5>
+                    <p class="card-text text-muted">Personnel management</p>
+                </div>
+            </a>
+        </div>
+
     </div>
-
-  </div>
-
 </div>
 {% endblock %}

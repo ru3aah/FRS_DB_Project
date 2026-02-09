@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}FRS DB | Shifts{% endblock %}
+
+{% block content %}
+{% include "includes/navbar.html" %}
+
+<div class="container mt-4">
+
+  <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+    <div class="d-flex gap-2 flex-wrap">
+      <a class="btn btn-success" href="{% url 'staff:shifts_add' %}">Add new shift</a>
+      <a class="btn btn-outline-secondary" href="{% url 'staff:index' %}">Staff menu</a>
+    </div>
+
+    <a class="btn btn-outline-primary" href="{{ toggle_filter_url }}">
+      {{ toggle_filter_label }}
+    </a>
+  </div>
+
+  {% if messages %}
+    <div class="mb-3">
+      {% for message in messages %}
+        <div class="alert alert-info mb-2">{{ message }}</div>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  {% if not active_company %}
+    <div class="alert alert-warning">
+      Active company is not selected.
+    </div>
+  {% else %}
+
+    <div class="card">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <strong>Shifts</strong>
+        <span class="text-muted small">
+          Company: {{ active_company.name }}
+          {% if show_all %}(showing: all){% else %}(showing: active only){% endif %}
+        </span>
+      </div>
+
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-striped table-hover mb-0 align-middle">
+            <thead class="table-light">
+              <tr>
+                <th style="width: 160px;">Actions</th>
+                <th style="width: 120px;">Shift #</th>
+                <th>Shift type</th>
+                <th style="width: 120px;">Active</th>
+                <th style="width: 220px;">Created</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for s in shifts %}
+                <tr>
+                  <td class="text-nowrap">
+                    <a class="btn btn-sm btn-outline-primary" href="{% url 'staff:shifts_edit' s.pk %}">Edit</a>
+
+                    <form class="d-inline"
+                          method="post"
+                          action="{% url 'staff:shifts_delete' s.pk %}{% if show_all %}?show=all{% endif %}"
+                          onsubmit="return confirm('Deactivate this shift (soft delete)?');">
+                      {% csrf_token %}
+                      <button type="submit" class="btn btn-sm btn-outline-danger">Del</button>
+                    </form>
+                  </td>
+
+                  <td>{{ s.shift_number }}</td>
+                  <td>
+                    {% if s.shift_type %}
+                      {{ s.shift_type.shift_type_short }} — {{ s.shift_type.shift_type_name }}
+                    {% else %}
+                      <span class="text-muted">—</span>
+                    {% endif %}
+                  </td>
+
+                  <td>
+                    {% if s.is_active %}
+                      <span class="badge bg-success">Yes</span>
+                    {% else %}
+                      <span class="badge bg-secondary">No</span>
+                    {% endif %}
+                  </td>
+
+                  <td>{{ s.created_at|date:"Y-m-d H:i" }}</td>
+                </tr>
+              {% empty %}
+                <tr>
+                  <td colspan="5" class="text-center p-4 text-muted">
+                    No shifts found.
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    {% if is_paginated %}
+      <nav class="mt-3">
+        <ul class="pagination justify-content-center">
+
+          {% if page_obj.has_previous %}
+            <li class="page-item">
+              <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if show_all %}&show=all{% endif %}">Previous</a>
+            </li>
+          {% else %}
+            <li class="page-item disabled"><span class="page-link">Previous</span></li>
+          {% endif %}
+
+          <li class="page-item disabled">
+            <span class="page-link">
+              Page {{ page_obj.number }} of {{ paginator.num_pages }}
+            </span>
+          </li>
+
+          {% if page_obj.has_next %}
+            <li class="page-item">
+              <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if show_all %}&show=all{% endif %}">Next</a>
+            </li>
+          {% else %}
+            <li class="page-item disabled"><span class="page-link">Next</span></li>
+          {% endif %}
+
+        </ul>
+      </nav>
+    {% endif %}
+
+  {% endif %}
+</div>
+{% endblock %}
