@@ -334,7 +334,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (fileInput) fileInput.value = "";
 
       // reset preview & filename
-      preview.src = "{% static 'img/logos/frs_logo.png' %}";
+      preview.src = "{% static 'img/logos/no_img.png' %}";
       if (filenameEl) filenameEl.textContent = "No photo uploaded";
     });
   }
