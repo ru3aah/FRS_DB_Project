@@ -53,7 +53,8 @@
               </thead>
 
               <tbody>
-                {% for item in items %}
+                {% for row in rows %}
+                  {% with item=row.item form=row.form %}
                   <tr>
                     <td>{{ item.position.name_long }}</td>
                     <td>{{ item.shift_type.shift_type_short }}</td>
@@ -86,12 +87,13 @@
                       <form method="post" action="{% url 'staff:assignment_add' item.pk %}">
                         {% csrf_token %}
                         <div class="d-flex gap-2">
-                          {{ forms_by_item[item.pk].person }}
+                          {{ form.person }}
                           <button class="btn btn-outline-primary" type="submit">Assign</button>
                         </div>
                       </form>
                     </td>
                   </tr>
+                  {% endwith %}
                 {% empty %}
                   <tr>
                     <td colspan="7" class="text-center p-4 text-muted">No plan items.</td>

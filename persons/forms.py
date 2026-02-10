@@ -1,47 +1,10 @@
 from django import forms
 
-from .models import Person, PersonID, IDType
+from .models import IDType, Person, PersonID, PersonIDScan
+from .widgets import BootstrapFormMixin, MultiFileField, MultiFileInput
 
 
-class MultiFileInput(forms.ClearableFileInput):
-    """
-    Enable <input type="file" multiple>.
-    """
-
-    allow_multiple_selected = True
-
-
-class MultiFileField(forms.FileField):
-    """
-    Accepts one OR multiple uploaded files.
-    When widget.allow_multiple_selected=True, widget returns a list.
-    """
-
-    def clean(self, data, initial=None):
-        if not data:
-            return []
-
-        # If multiple files were selected, data is a list.
-        if isinstance(data, (list, tuple)):
-            cleaned_files = []
-            errors = []
-
-            for item in data:
-                try:
-                    cleaned_files.append(super().clean(item, initial))
-                except forms.ValidationError as e:
-                    errors.extend(e.error_list)
-
-            if errors:
-                raise forms.ValidationError(errors)
-
-            return cleaned_files
-
-        # Single file selected
-        return [super().clean(data, initial)]
-
-
-class PersonForm(forms.ModelForm):
+class PersonForm(BootstrapFormMixin, forms.ModelForm):
     class Meta:
         model = Person
         fields = "__all__"
@@ -49,12 +12,21 @@ class PersonForm(forms.ModelForm):
             "dob": forms.DateInput(attrs={"type": "date"}),
         }
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._apply_bootstrap()
 
-class PersonIDForm(forms.ModelForm):
+
+class PersonIDForm(BootstrapFormMixin, forms.ModelForm):
     # not a model field - only for uploads
     scans = MultiFileField(
         required=False,
-        widget=MultiFileInput(attrs={"multiple": True}),
+        widget=MultiFileInput(
+            attrs={
+                "multiple": True,
+                "accept": ".pdf,.jpg,.jpeg,.png",
+            }
+        ),
         help_text="You can upload one or more files (PDF/JPG/PNG).",
         label="Scans",
     )
@@ -74,8 +46,40 @@ class PersonIDForm(forms.ModelForm):
             "valid_till": forms.DateInput(attrs={"type": "date"}),
         }
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
-class IDTypeForm(forms.ModelForm):
+        # Apply Bootstrap for model fields + "scans"
+        self._apply_bootstrap()
+
+        # Ensure scans also has proper class (it is a file input)
+        self.fields["scans"].widget.attrs.setdefault("class", "form-control")
+
+
+class PersonIDScanForm(BootstrapFormMixin, forms.ModelForm):
+    class Meta:
+        model = PersonIDScan
+        fields = ["scan_name", "file"]
+        widgets = {
+            "scan_name": forms.TextInput(),
+            "file": forms.ClearableFileInput(
+                attrs={"accept": ".pdf,.jpg,.jpeg,.png"},
+            ),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._apply_bootstrap()
+
+        # File input should be form-control in Bootstrap
+        self.fields["file"].widget.attrs.setdefault("class", "form-control")
+
+
+class IDTypeForm(BootstrapFormMixin, forms.ModelForm):
     class Meta:
         model = IDType
         fields = ["code", "name", "is_active"]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._apply_bootstrap()

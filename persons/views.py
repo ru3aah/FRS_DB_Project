@@ -1,20 +1,19 @@
-from django import forms
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.core.paginator import Paginator
 from django.shortcuts import get_object_or_404
 from django.urls import reverse, reverse_lazy
 from django.views.generic import (
-    ListView,
-    DetailView,
     CreateView,
-    UpdateView,
     DeleteView,
+    DetailView,
+    ListView,
+    UpdateView,
 )
 
 from companies.models import Company
-from .forms import PersonForm, PersonIDForm, IDTypeForm
-from .models import Person, PersonID, PersonIDScan, IDType
+from .forms import IDTypeForm, PersonForm, PersonIDForm, PersonIDScanForm
+from .models import IDType, Person, PersonID, PersonIDScan
 
 # -----------------------
 # Common mixins
@@ -249,12 +248,6 @@ class PersonIDDeleteView(PersonIDBaseMixin, DeleteView):
 # -----------------------
 # Scans create / update / delete
 # -----------------------
-
-
-class PersonIDScanForm(forms.ModelForm):
-    class Meta:
-        model = PersonIDScan
-        fields = ["scan_name", "file"]
 
 
 class PersonIDScanBaseMixin(PersonIDBaseMixin):

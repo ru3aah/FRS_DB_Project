@@ -445,8 +445,7 @@ class AssignmentsView(LoginRequiredMixin, ActiveCompanyMixin, TemplateView):
 
         if company is None:
             ctx["plan"] = None
-            ctx["items"] = []
-            ctx["forms_by_item"] = {}
+            ctx["rows"] = []
             return ctx
 
         plan = (
@@ -460,8 +459,7 @@ class AssignmentsView(LoginRequiredMixin, ActiveCompanyMixin, TemplateView):
 
         ctx["plan"] = plan
         if plan is None:
-            ctx["items"] = []
-            ctx["forms_by_item"] = {}
+            ctx["rows"] = []
             return ctx
 
         active_assignments_qs = StaffingAssignment.objects.filter(
@@ -483,10 +481,11 @@ class AssignmentsView(LoginRequiredMixin, ActiveCompanyMixin, TemplateView):
             it.vacant = max(0, int(it.position_qty) - int(it.occupied or 0))
             items.append(it)
 
-        ctx["items"] = items
-        ctx["forms_by_item"] = {
-            it.pk: AssignmentCreateForm(company=company, item=it) for it in items
-        }
+        ctx["items"] = items  # можно оставить, если где-то ещё используется
+        ctx["rows"] = [
+            {"item": it, "form": AssignmentCreateForm(company=company, item=it)}
+            for it in items
+        ]
         return ctx
 
 
