@@ -18,14 +18,6 @@
     </a>
   </div>
 
-  {% if messages %}
-    <div class="mb-3">
-      {% for message in messages %}
-        <div class="alert alert-info mb-2">{{ message }}</div>
-      {% endfor %}
-    </div>
-  {% endif %}
-
   {% if not active_company %}
     <div class="alert alert-warning">Active company is not selected.</div>
   {% else %}
@@ -44,49 +36,57 @@
           <table class="table table-striped table-hover mb-0 align-middle">
             <thead class="table-light">
               <tr>
-                <th style="width: 200px;">Actions</th>
+                <th style="width: 120px;">Active</th>
                 <th>Name</th>
-                <th style="width: 140px;">Active</th>
-                <th style="width: 140px;">Items</th>
+                <th style="width: 120px;">Items</th>
                 <th style="width: 220px;">Created</th>
+                <th style="width: 220px;">Updated</th>
               </tr>
             </thead>
+
             <tbody>
-              {# ВАЖНО: context_object_name="staffing_plans" #}
               {% for plan in staffing_plans %}
-                <tr>
+                <tr class="plan-row"
+                    data-href="{% url 'staff:staffing_plans_edit' plan.pk %}"
+                    style="cursor:pointer;">
+
                   <td class="text-nowrap">
-                    <a class="btn btn-sm btn-outline-primary" href="{% url 'staff:staffing_plans_edit' plan.pk %}">Edit</a>
-
-                    <form class="d-inline"
-                          method="post"
-                          action="{% url 'staff:staffing_plans_delete' plan.pk %}{% if show_all %}?show=all{% endif %}"
-                          onsubmit="return confirm('Deactivate this staffing plan (soft delete)?');">
-                      {% csrf_token %}
-                      <button type="submit" class="btn btn-sm btn-outline-danger">Del</button>
-                    </form>
-                  </td>
-
-                  <td>
-                    <a class="text-decoration-none" href="{% url 'staff:staffing_plans_edit' plan.pk %}">
-                      {% if plan.staffing_plan_name %}
-                        {{ plan.staffing_plan_name }}
-                      {% else %}
-                        Staffing plan #{{ plan.staffing_plan_id }}
-                      {% endif %}
-                    </a>
-                  </td>
-
-                  <td>
                     {% if plan.is_active %}
-                      <span class="badge bg-success">Yes</span>
+                      <form class="d-inline"
+                            method="post"
+                            action="{% url 'staff:staffing_plans_delete' plan.pk %}{% if show_all %}?show=all{% endif %}">
+                        {% csrf_token %}
+                        <button type="submit"
+                                class="btn btn-sm btn-success plan-toggle-btn"
+                                title="Click to deactivate">
+                          Yes
+                        </button>
+                      </form>
                     {% else %}
-                      <span class="badge bg-secondary">No</span>
+                      <form class="d-inline"
+                            method="post"
+                            action="{% url 'staff:staffing_plans_activate' plan.pk %}{% if show_all %}?show=all{% endif %}">
+                        {% csrf_token %}
+                        <button type="submit"
+                                class="btn btn-sm btn-outline-secondary plan-toggle-btn"
+                                title="Click to activate">
+                          No
+                        </button>
+                      </form>
+                    {% endif %}
+                  </td>
+
+                  <td>
+                    {% if plan.staffing_plan_name %}
+                      {{ plan.staffing_plan_name }}
+                    {% else %}
+                      Staffing plan #{{ plan.staffing_plan_id }}
                     {% endif %}
                   </td>
 
                   <td>{{ plan.items.count }}</td>
                   <td>{{ plan.created_at|date:"Y-m-d H:i" }}</td>
+                  <td>{{ plan.updated_at|date:"Y-m-d H:i" }}</td>
                 </tr>
               {% empty %}
                 <tr>
@@ -129,4 +129,22 @@
 
   {% endif %}
 </div>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  // Prevent row navigation when clicking on the toggle button/form
+  document.querySelectorAll(".plan-toggle-btn").forEach(btn => {
+    btn.addEventListener("click", (e) => e.stopPropagation());
+  });
+
+  // Make the whole row clickable
+  document.querySelectorAll("tr.plan-row").forEach(row => {
+    row.addEventListener("click", () => {
+      const href = row.getAttribute("data-href");
+      if (href) window.location.href = href;
+    });
+  });
+});
+</script>
+
 {% endblock %}

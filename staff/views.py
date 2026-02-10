@@ -1,3 +1,4 @@
+# staff/views.py
 from __future__ import annotations
 
 from django.contrib import messages
@@ -35,6 +36,9 @@ class StaffHomeView(LoginRequiredMixin, TemplateView):
     template_name = "staff/index.html"
 
 
+# =========================
+# Positions
+# =========================
 class PositionListView(LoginRequiredMixin, ActiveCompanyMixin, ListView):
     model = Position
     template_name = "staff/positions_list.html"
@@ -117,6 +121,9 @@ class PositionDeactivateView(LoginRequiredMixin, ActiveCompanyMixin, View):
         return redirect("staff:positions_list")
 
 
+# =========================
+# Shift types
+# =========================
 class ShiftTypeListView(LoginRequiredMixin, ActiveCompanyMixin, ListView):
     model = ShiftType
     template_name = "staff/shift_types_list.html"
@@ -211,6 +218,9 @@ class ShiftTypeDeactivateView(LoginRequiredMixin, ActiveCompanyMixin, View):
         return redirect("staff:shift_types_list")
 
 
+# =========================
+# Shifts
+# =========================
 class ShiftListView(LoginRequiredMixin, ActiveCompanyMixin, ListView):
     model = Shift
     template_name = "staff/shifts_list.html"
@@ -311,6 +321,19 @@ class ShiftDeactivateView(LoginRequiredMixin, ActiveCompanyMixin, View):
         return redirect("staff:shifts_list")
 
 
+# =========================
+# Staffing Plans (with rules)
+# =========================
+def _plan_has_active_assignments(plan: StaffingPlan) -> bool:
+    """
+    True if there is at least one active StaffingAssignment linked to this plan.
+    """
+    return StaffingAssignment.objects.filter(
+        is_active=True,
+        staffing_plan_item__staffing_plan=plan,
+    ).exists()
+
+
 class StaffingPlanListView(LoginRequiredMixin, ActiveCompanyMixin, ListView):
     model = StaffingPlan
     template_name = "staff/staffing_plans_list.html"
@@ -321,10 +344,15 @@ class StaffingPlanListView(LoginRequiredMixin, ActiveCompanyMixin, ListView):
         company = self.get_active_company()
         if company is None:
             return StaffingPlan.objects.none()
+
         qs = StaffingPlan.objects.filter(company=company)
+
+        # показать только активные если show != all
         if self.request.GET.get("show") != "all":
             qs = qs.filter(is_active=True)
-        return qs.order_by("-updated_at")
+
+        # Требование: активный всегда первым, остальные по updated_at desc
+        return qs.order_by("-is_active", "-updated_at")
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
@@ -393,12 +421,65 @@ class StaffingPlanBaseMixin(ActiveCompanyMixin):
             )
 
         with transaction.atomic():
+            # сохраняем план и items
             self.object = form.save()
             items_formset.instance = self.object
             items_formset.save()
 
+            # ---------
+            # Правила активности (после сохранения, но в одной транзакции)
+            # ---------
+            desired_active = bool(self.object.is_active)
+
+            if desired_active:
+                # хотим сделать этот план активным -> надо выключить другие активные,
+                # но если "текущий активный другой" имеет назначения — запрещаем переключение
+                other_active = (
+                    StaffingPlan.objects.filter(company=company, is_active=True)
+                    .exclude(pk=self.object.pk)
+                    .order_by("-updated_at")
+                    .first()
+                )
+                if other_active and _plan_has_active_assignments(other_active):
+                    # откатываем активность обратно
+                    StaffingPlan.objects.filter(pk=self.object.pk).update(
+                        is_active=False
+                    )
+                    self.object.is_active = False
+                    form.add_error(
+                        "is_active",
+                        "Cannot activate this plan: current active plan has assignments.",
+                    )
+                    transaction.set_rollback(True)
+                    return self.render_to_response(
+                        self.get_context_data(form=form, items_formset=items_formset)
+                    )
+
+                # можно активировать — деактивируем остальные
+                StaffingPlan.objects.filter(company=company, is_active=True).exclude(
+                    pk=self.object.pk
+                ).update(is_active=False)
+
+            else:
+                # хотим сделать план неактивным -> запрещаем, если есть активные назначения
+                if _plan_has_active_assignments(self.object):
+                    # вернуть активность как была (если план был активным до запроса — пользователь пытался снять)
+                    # безопасно: просто оставим is_active=True
+                    StaffingPlan.objects.filter(pk=self.object.pk).update(
+                        is_active=True
+                    )
+                    self.object.is_active = True
+                    form.add_error(
+                        "is_active",
+                        "Cannot deactivate this plan: it has active assignments.",
+                    )
+                    transaction.set_rollback(True)
+                    return self.render_to_response(
+                        self.get_context_data(form=form, items_formset=items_formset)
+                    )
+
         messages.success(self.request, "Staffing plan saved.")
-        return redirect(self.get_success_url())
+        return redirect("staff:staffing_plans_list")
 
 
 class StaffingPlanCreateView(LoginRequiredMixin, StaffingPlanBaseMixin, CreateView):
@@ -415,7 +496,53 @@ class StaffingPlanUpdateView(LoginRequiredMixin, StaffingPlanBaseMixin, UpdateVi
         return StaffingPlan.objects.filter(company=company)
 
 
+class StaffingPlanActivateView(LoginRequiredMixin, ActiveCompanyMixin, View):
+    """
+    Activate a plan for the company:
+    - only one active plan allowed
+    - if current active plan has assignments -> block (because it would be deactivated)
+    """
+
+    def post(self, request: HttpRequest, pk: int) -> HttpResponse:
+        company = self.get_active_company()
+        if company is None:
+            messages.error(request, "Active company is not selected.")
+            return redirect("staff:staffing_plans_list")
+
+        target = get_object_or_404(StaffingPlan, pk=pk, company=company)
+
+        if target.is_active:
+            messages.info(request, "This staffing plan is already active.")
+            return redirect("staff:staffing_plans_list")
+
+        current_active = (
+            StaffingPlan.objects.filter(company=company, is_active=True)
+            .order_by("-updated_at")
+            .first()
+        )
+        if current_active and _plan_has_active_assignments(current_active):
+            messages.error(
+                request,
+                "Cannot activate another plan: current active plan has assignments.",
+            )
+            return redirect("staff:staffing_plans_list")
+
+        with transaction.atomic():
+            StaffingPlan.objects.filter(company=company, is_active=True).update(
+                is_active=False
+            )
+            StaffingPlan.objects.filter(pk=target.pk).update(is_active=True)
+
+        messages.success(request, "Staffing plan activated.")
+        return redirect("staff:staffing_plans_list")
+
+
 class StaffingPlanDeactivateView(LoginRequiredMixin, ActiveCompanyMixin, View):
+    """
+    Deactivate (soft) a staffing plan:
+    - запрещено, если у плана есть активные назначения
+    """
+
     def post(self, request: HttpRequest, pk: int) -> HttpResponse:
         company = self.get_active_company()
         if company is None:
@@ -423,18 +550,32 @@ class StaffingPlanDeactivateView(LoginRequiredMixin, ActiveCompanyMixin, View):
             return redirect("staff:staffing_plans_list")
 
         obj = get_object_or_404(StaffingPlan, pk=pk, company=company)
-        if obj.is_active:
-            obj.is_active = False
-            obj.save(update_fields=["is_active"])
-            messages.success(request, "Staffing plan deactivated (soft delete).")
-        else:
+
+        if not obj.is_active:
             messages.info(request, "Staffing plan is already inactive.")
+            if request.GET.get("show") == "all":
+                return redirect(f"{reverse('staff:staffing_plans_list')}?show=all")
+            return redirect("staff:staffing_plans_list")
+
+        # ключевой фикс: считаем только АКТИВНЫЕ назначения по этому плану
+        if _plan_has_active_assignments(obj):
+            messages.error(request, "Cannot deactivate: plan has active assignments.")
+            if request.GET.get("show") == "all":
+                return redirect(f"{reverse('staff:staffing_plans_list')}?show=all")
+            return redirect("staff:staffing_plans_list")
+
+        obj.is_active = False
+        obj.save(update_fields=["is_active"])
+        messages.success(request, "Staffing plan deactivated (soft delete).")
 
         if request.GET.get("show") == "all":
             return redirect(f"{reverse('staff:staffing_plans_list')}?show=all")
         return redirect("staff:staffing_plans_list")
 
 
+# =========================
+# Assignments
+# =========================
 class AssignmentsView(LoginRequiredMixin, ActiveCompanyMixin, TemplateView):
     template_name = "staff/assignments.html"
 
@@ -481,7 +622,7 @@ class AssignmentsView(LoginRequiredMixin, ActiveCompanyMixin, TemplateView):
             it.vacant = max(0, int(it.position_qty) - int(it.occupied or 0))
             items.append(it)
 
-        ctx["items"] = items  # можно оставить, если где-то ещё используется
+        ctx["items"] = items
         ctx["rows"] = [
             {"item": it, "form": AssignmentCreateForm(company=company, item=it)}
             for it in items

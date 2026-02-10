@@ -23,6 +23,7 @@ from .views import (
     StaffingPlanCreateView,
     StaffingPlanUpdateView,
     StaffingPlanDeactivateView,
+    StaffingPlanActivateView,
     # Assignments
     AssignmentsView,
     AssignmentCreateView,
@@ -88,6 +89,11 @@ urlpatterns = [
         "staffing-plans/<int:pk>/edit/",
         StaffingPlanUpdateView.as_view(),
         name="staffing_plans_edit",
+    ),
+    path(
+        "staffing-plans/<int:pk>/activate/",
+        StaffingPlanActivateView.as_view(),
+        name="staffing_plans_activate",
     ),
     path(
         "staffing-plans/<int:pk>/delete/",
