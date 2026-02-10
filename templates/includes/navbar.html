@@ -85,25 +85,25 @@
           </form>
 
           {# Company (ONLY if logo exists) #}
-          {% if company and company.logo %}
+
             <div class="d-flex align-items-center gap-2">
-              <span class="text-light small">
-                {{ company.name_short }}
-              </span>
-              <img
-                src="{{ company.logo.url }}"
-                alt="Company logo"
-                width="32"
-                height="32"
-                class="rounded-circle"
-                style="object-fit: cover;"
-              >
+                {% if company %}
+                    <span class="text-light small">
+                        {{ company.name_short }}
+                    </span>
+                {% endif %}
+                {% if company.logo %}
+                    <img
+                            src="{{ company.logo.url }}"
+                            alt="Company logo"
+                            width="32"
+                            height="32"
+                            class="rounded-circle"
+                            style="object-fit: cover;"
+                    >
+                {% endif %}
             </div>
-          {% endif %}
-
         </div>
-      {% endif %}
-
     </div>
   </div>
 </nav>

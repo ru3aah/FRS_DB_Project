@@ -47,7 +47,7 @@ class BootstrapFormMixin:
     - everything else -> form-control
     """
 
-    def _apply_bootstrap(self):
+    def _apply_bootstrap(self) -> None:
         for name, field in self.fields.items():
             w = field.widget
 
