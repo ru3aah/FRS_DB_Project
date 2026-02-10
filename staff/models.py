@@ -209,6 +209,13 @@ class StaffingPlan(models.Model):
         help_text="Company this staffing plan belongs to",
     )
 
+    staffing_plan_name = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        help_text="Human-readable staffing plan name",
+    )
+
     is_active = models.BooleanField(default=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
@@ -219,6 +226,9 @@ class StaffingPlan(models.Model):
         ordering = ["-is_active", "-updated_at"]
 
     def __str__(self) -> str:
+        name = (self.staffing_plan_name or "").strip()
+        if name:
+            return f"{name} ({self.company})"
         return f"Staffing plan #{self.staffing_plan_id} ({self.company})"
 
 

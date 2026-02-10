@@ -45,6 +45,7 @@
             <thead class="table-light">
               <tr>
                 <th style="width: 200px;">Actions</th>
+                <th>Name</th>
                 <th style="width: 140px;">Active</th>
                 <th style="width: 140px;">Items</th>
                 <th style="width: 220px;">Created</th>
@@ -67,6 +68,16 @@
                   </td>
 
                   <td>
+                    <a class="text-decoration-none" href="{% url 'staff:staffing_plans_edit' plan.pk %}">
+                      {% if plan.staffing_plan_name %}
+                        {{ plan.staffing_plan_name }}
+                      {% else %}
+                        Staffing plan #{{ plan.staffing_plan_id }}
+                      {% endif %}
+                    </a>
+                  </td>
+
+                  <td>
                     {% if plan.is_active %}
                       <span class="badge bg-success">Yes</span>
                     {% else %}
@@ -79,7 +90,7 @@
                 </tr>
               {% empty %}
                 <tr>
-                  <td colspan="4" class="text-center p-4 text-muted">No staffing plans found.</td>
+                  <td colspan="5" class="text-center p-4 text-muted">No staffing plans found.</td>
                 </tr>
               {% endfor %}
             </tbody>

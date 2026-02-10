@@ -68,9 +68,10 @@ class ShiftForm(forms.ModelForm):
 class StaffingPlanForm(forms.ModelForm):
     class Meta:
         model = StaffingPlan
-        fields = ["is_active"]
+        fields = ["staffing_plan_name", "is_active"]
         widgets = {
-            "is_active": forms.CheckboxInput(attrs={"class": "form-check-input"})
+            "staffing_plan_name": forms.TextInput(attrs={"class": "form-control"}),
+            "is_active": forms.CheckboxInput(attrs={"class": "form-check-input"}),
         }
 
 
@@ -140,7 +141,6 @@ class AssignmentCreateForm(forms.Form):
 
         person: Person = self.cleaned_data["person"]
 
-        # Employment: update_or_create (не затираем hired_on если уже есть)
         emp, created = StaffEmployment.objects.update_or_create(
             company=self.company,
             person=person,
@@ -153,7 +153,6 @@ class AssignmentCreateForm(forms.Form):
             emp.hired_on = date.today()
             emp.save(update_fields=["hired_on"])
 
-        # Assignment: update_or_create по UNIQUE(item, person)
         assignment, _ = StaffingAssignment.objects.update_or_create(
             staffing_plan_item=self.item,
             person=person,
