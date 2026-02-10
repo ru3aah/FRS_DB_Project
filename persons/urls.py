@@ -10,6 +10,8 @@ from .views import (
     PersonIDDeleteView,
     PersonIDScanDeleteView,
     IDTypeCreateView,
+    PersonIDScanCreateView,
+    PersonIDScanUpdateView,
 )
 
 app_name = "persons"
@@ -33,7 +35,17 @@ urlpatterns = [
         PersonIDDeleteView.as_view(),
         name="doc_delete",
     ),
-    # Scans (files) delete
+    # Scans (files)
+    path(
+        "<int:person_pk>/docs/<int:doc_pk>/scans/create/",
+        PersonIDScanCreateView.as_view(),
+        name="scan_create",
+    ),
+    path(
+        "<int:person_pk>/docs/<int:doc_pk>/scans/<int:scan_pk>/edit/",
+        PersonIDScanUpdateView.as_view(),
+        name="scan_edit",
+    ),
     path(
         "<int:person_pk>/docs/<int:doc_pk>/scans/<int:scan_pk>/delete/",
         PersonIDScanDeleteView.as_view(),

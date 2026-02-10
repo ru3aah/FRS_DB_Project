@@ -1,3 +1,4 @@
+from django import forms
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.core.paginator import Paginator
@@ -130,10 +131,7 @@ class PersonUpdateView(NavbarContextMixin, HRAccessMixin, UpdateView):
         page_number = self.request.GET.get(self.DOCS_PAGE_PARAM) or 1
         docs_page_obj = paginator.get_page(page_number)
 
-        # backward compat (если где-то ещё используется person_docs)
         ctx["person_docs"] = docs_page_obj.object_list
-
-        # pagination vars for template
         ctx["docs_page_obj"] = docs_page_obj
         ctx["docs_is_paginated"] = docs_page_obj.has_other_pages()
         ctx["docs_page_param"] = self.DOCS_PAGE_PARAM
@@ -173,7 +171,6 @@ class PersonIDCreateView(PersonIDBaseMixin, CreateView):
         form.instance.person = self.person_obj
         response = super().form_valid(form)
 
-        # Save uploaded scans (multi)
         for f in self.request.FILES.getlist("scans"):
             PersonIDScan.objects.create(person_id=self.object, file=f)
 
@@ -193,21 +190,33 @@ class PersonIDUpdateView(PersonIDBaseMixin, UpdateView):
     template_name = "persons/doc_form.html"
     pk_url_kwarg = "doc_pk"
 
+    SCANS_PER_PAGE = 9
+    SCANS_PAGE_PARAM = "scans_page"
+
     def get_queryset(self):
         return PersonID.objects.filter(person=self.person_obj)
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        # existing scans list for UI
-        ctx["scans"] = PersonIDScan.objects.filter(person_id=self.object).order_by(
+
+        scans_qs = PersonIDScan.objects.filter(person_id=self.object).order_by(
             "-uploaded_at"
         )
+
+        paginator = Paginator(scans_qs, self.SCANS_PER_PAGE)
+        page_number = self.request.GET.get(self.SCANS_PAGE_PARAM) or 1
+        scans_page_obj = paginator.get_page(page_number)
+
+        ctx["scans_page_obj"] = scans_page_obj
+        ctx["scans_is_paginated"] = scans_page_obj.has_other_pages()
+        ctx["scans_page_param"] = self.SCANS_PAGE_PARAM
+        ctx["scans"] = scans_page_obj.object_list
+
         return ctx
 
     def form_valid(self, form):
         response = super().form_valid(form)
 
-        # Save uploaded scans (multi)
         for f in self.request.FILES.getlist("scans"):
             PersonIDScan.objects.create(person_id=self.object, file=f)
 
@@ -238,8 +247,74 @@ class PersonIDDeleteView(PersonIDBaseMixin, DeleteView):
 
 
 # -----------------------
-# Scans delete
+# Scans create / update / delete
 # -----------------------
+
+
+class PersonIDScanForm(forms.ModelForm):
+    class Meta:
+        model = PersonIDScan
+        fields = ["scan_name", "file"]
+
+
+class PersonIDScanBaseMixin(PersonIDBaseMixin):
+    """
+    Ensures doc exists and belongs to person.
+    URL contains: person_pk, doc_pk
+    """
+
+    doc_obj: PersonID
+
+    def dispatch(self, request, *args, **kwargs):
+        self.person_obj = get_object_or_404(Person, pk=kwargs["person_pk"])
+        self.doc_obj = get_object_or_404(
+            PersonID, pk=kwargs["doc_pk"], person=self.person_obj
+        )
+        return super(PersonIDBaseMixin, self).dispatch(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["doc_obj"] = self.doc_obj
+        return ctx
+
+
+class PersonIDScanCreateView(PersonIDScanBaseMixin, CreateView):
+    model = PersonIDScan
+    form_class = PersonIDScanForm
+    template_name = "persons/scan_form.html"
+
+    def form_valid(self, form):
+        form.instance.person_id = self.doc_obj
+        response = super().form_valid(form)
+        messages.success(self.request, "Scan uploaded.")
+        return response
+
+    def get_success_url(self):
+        return reverse(
+            "persons:doc_edit",
+            kwargs={"person_pk": self.person_obj.pk, "doc_pk": self.doc_obj.pk},
+        )
+
+
+class PersonIDScanUpdateView(PersonIDScanBaseMixin, UpdateView):
+    model = PersonIDScan
+    form_class = PersonIDScanForm
+    template_name = "persons/scan_form.html"
+    pk_url_kwarg = "scan_pk"
+
+    def get_queryset(self):
+        return PersonIDScan.objects.filter(person_id=self.doc_obj)
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        messages.success(self.request, "Scan updated.")
+        return response
+
+    def get_success_url(self):
+        return reverse(
+            "persons:doc_edit",
+            kwargs={"person_pk": self.person_obj.pk, "doc_pk": self.doc_obj.pk},
+        )
 
 
 class PersonIDScanDeleteView(PersonIDBaseMixin, DeleteView):
@@ -248,12 +323,10 @@ class PersonIDScanDeleteView(PersonIDBaseMixin, DeleteView):
     template_name = "persons/scan_confirm_delete.html"
 
     def get_queryset(self):
-        # Limit by current document (doc_pk from URL)
         return PersonIDScan.objects.filter(person_id_id=self.kwargs["doc_pk"])
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        # IMPORTANT: pass doc_pk to template to build correct links
         ctx["doc_pk"] = int(self.kwargs["doc_pk"])
         return ctx
 
@@ -287,7 +360,7 @@ class IDTypeCreateView(NavbarContextMixin, HRAccessMixin, CreateView):
         return response
 
     def get_success_url(self):
-        next_url = self.request.GET.get("next")
+        next_url = self.request.POST.get("next") or self.request.GET.get("next")
         if next_url:
             return next_url
         return reverse_lazy("persons:index")

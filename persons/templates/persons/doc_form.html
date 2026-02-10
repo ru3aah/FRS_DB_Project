@@ -59,77 +59,51 @@
         <div class="row g-3">
 
           {# ---------- ROW 1 ---------- #}
-
           <div class="col-md-6">
-            <div class="d-flex align-items-center gap-2 justify-content-start">
-              <label class="form-label mb-0" style="min-width: 90px;">
-                Doc type
-              </label>
-
+            <div class="d-flex align-items-center gap-2">
+              <label class="form-label mb-0" style="min-width: 90px;">Doc type</label>
               <div class="flex-grow-1">
                 {{ form.id_type }}
               </div>
-
-              {# FIX: pass next back to this doc form #}
               <a class="btn btn-sm btn-outline-secondary"
                  href="{% url 'persons:idtype_create' %}?next={{ request.get_full_path|urlencode }}">
                 Add
               </a>
             </div>
-
             {% if form.id_type.errors %}
-              <div class="text-danger small mt-1">
-                {{ form.id_type.errors }}
-              </div>
+              <div class="text-danger small mt-1">{{ form.id_type.errors }}</div>
             {% endif %}
           </div>
 
           <div class="col-md-6">
-            <div class="d-flex align-items-center gap-2 justify-content-start">
-              <label class="form-label mb-0" style="min-width: 100px;">
-                Doc number
-              </label>
-
+            <div class="d-flex align-items-center gap-2">
+              <label class="form-label mb-0" style="min-width: 100px;">Doc number</label>
               <div class="flex-grow-1">
                 {{ form.id_number }}
               </div>
             </div>
-
             {% if form.id_number.errors %}
-              <div class="text-danger small mt-1">
-                {{ form.id_number.errors }}
-              </div>
+              <div class="text-danger small mt-1">{{ form.id_number.errors }}</div>
             {% endif %}
           </div>
 
           {# ---------- ROW 2 ---------- #}
-
           <div class="col-md-12">
-            <div class="d-flex align-items-center gap-2 justify-content-start">
-              <label class="form-label mb-0" style="min-width: 120px;">
-                Issued country
-              </label>
-
+            <div class="d-flex align-items-center gap-2">
+              <label class="form-label mb-0" style="min-width: 120px;">Issued country</label>
               <div class="flex-grow-1">
                 {{ form.issued_country }}
               </div>
             </div>
-
             {% if form.issued_country.errors %}
-              <div class="text-danger small mt-1">
-                {{ form.issued_country.errors }}
-              </div>
+              <div class="text-danger small mt-1">{{ form.issued_country.errors }}</div>
             {% endif %}
           </div>
 
           {# ---------- ROW 3 ---------- #}
-
           <div class="col-md-6">
-            <div class="d-flex align-items-center gap-2 justify-content-start">
-              <label class="form-label mb-0" style="min-width: 100px;">
-                Issued on
-              </label>
-
+            <div class="d-flex align-items-center gap-2">
+              <label class="form-label mb-0" style="min-width: 100px;">Issued on</label>
               <div class="flex-grow-1">
                 {{ form.issued_on }}
               </div>
@@ -137,11 +111,8 @@
           </div>
 
           <div class="col-md-6">
-            <div class="d-flex align-items-center gap-2 justify-content-start">
-              <label class="form-label mb-0" style="min-width: 100px;">
-                Valid till
-              </label>
-
+            <div class="d-flex align-items-center gap-2">
+              <label class="form-label mb-0" style="min-width: 100px;">Valid till</label>
               <div class="flex-grow-1">
                 {{ form.valid_till }}
               </div>
@@ -149,13 +120,9 @@
           </div>
 
           {# ---------- ROW 4 ---------- #}
-
           <div class="col-md-12">
-            <div class="d-flex align-items-center gap-2 justify-content-start">
-              <label class="form-label mb-0" style="min-width: 120px;">
-                MRZ code
-              </label>
-
+            <div class="d-flex align-items-center gap-2">
+              <label class="form-label mb-0" style="min-width: 120px;">MRZ code</label>
               <div class="flex-grow-1">
                 {{ form.id_std_sequence }}
               </div>
@@ -170,9 +137,7 @@
         document
           .querySelectorAll("#docForm input, #docForm select, #docForm textarea")
           .forEach((el) => {
-            if (!el.classList.contains("text-center")) {
-              el.classList.add("text-center");
-            }
+            if (!el.classList.contains("text-center")) el.classList.add("text-center");
             if (
               el.type !== "checkbox" &&
               el.type !== "file" &&
@@ -187,48 +152,108 @@
     </div>
   </div>
 
-  {# ===== Scans section — без изменений ===== #}
+  {# ===== Scans section ===== #}
   {% if object %}
     <div class="d-flex justify-content-between align-items-center mb-2">
       <h2 class="h5 mb-0">Document Scans</h2>
+
+      {# FIX: Add Scan -> scan_form (create) #}
       <a class="btn btn-sm btn-primary"
-         href="{% url 'under_construction' %}">
+         href="{% url 'persons:scan_create' person_obj.pk object.pk %}">
         Add Scan
       </a>
     </div>
 
     {% if scans_page_obj and scans_page_obj.object_list %}
       <div class="row g-3">
+
         {% for scan in scans_page_obj %}
           <div class="col-12 col-sm-6 col-md-4">
             <div class="card h-100 shadow-sm">
-              <div class="ratio ratio-1x1 bg-light">
-                <a href="{{ scan.file.url }}" target="_blank">
-                  <img src="{{ scan.file.url }}"
-                       class="w-100 h-100"
-                       style="object-fit: cover;">
+
+              {# Header: scan_name #}
+              <div class="card-header small fw-semibold text-truncate">
+                {{ scan.scan_name|default:scan.file.name }}
+              </div>
+
+              {# Preview area #}
+              <div class="ratio ratio-1x1 bg-light d-flex align-items-center justify-content-center">
+                {% with url=scan.file.url|lower %}
+                  {% if url|slice:"-4:" == ".pdf" %}
+                    <a href="{{ scan.file.url }}"
+                       target="_blank"
+                       class="w-100 h-100 d-flex align-items-center justify-content-center text-decoration-none text-dark">
+                      <div class="text-center">
+                        <div style="font-size:48px;">📄</div>
+                        <div class="fw-semibold">PDF</div>
+                        <div class="small text-muted">Click to view</div>
+                      </div>
+                    </a>
+                  {% else %}
+                    <a href="{{ scan.file.url }}" target="_blank" class="w-100 h-100">
+                      <img
+                        src="{{ scan.file.url }}"
+                        class="w-100 h-100"
+                        style="object-fit: cover;"
+                        alt="{{ scan.scan_name|default:scan.file.name }}"
+                      >
+                    </a>
+                  {% endif %}
+                {% endwith %}
+              </div>
+
+              <div class="card-footer d-flex justify-content-between gap-2 p-2">
+                <a class="btn btn-sm btn-outline-secondary"
+                   href="{{ scan.file.url }}" target="_blank">
+                  View
                 </a>
-              </div>
-              <div class="card-body p-2">
-                <div class="small text-truncate">{{ scan.file.name }}</div>
-                <div class="text-muted small">
-                  Uploaded: {{ scan.uploaded_at|date:"Y-m-d H:i" }}
-                </div>
-              </div>
-              <div class="card-footer d-flex justify-content-between p-2">
-                <a class="btn btn-sm btn-outline-light"
-                   href="{% url 'under_construction' %}">View</a>
-                <a class="btn btn-sm btn-outline-light"
-                   href="{% url 'under_construction' %}">Edit</a>
+
+                {# FIX: Replace -> scan_form (edit конкретного scan) #}
+                <a class="btn btn-sm btn-outline-primary"
+                   href="{% url 'persons:scan_edit' person_obj.pk object.pk scan.pk %}">
+                  Replace
+                </a>
+
                 <a class="btn btn-sm btn-outline-danger"
                    href="{% url 'persons:scan_delete' person_obj.pk object.pk scan.pk %}">
                   Delete
                 </a>
               </div>
+
             </div>
           </div>
         {% endfor %}
+
       </div>
+
+      {# Pagination exists #}
+      {% if scans_is_paginated %}
+        <nav class="mt-3">
+          <ul class="pagination pagination-sm justify-content-center mb-0">
+            {% if scans_page_obj.has_previous %}
+              <li class="page-item">
+                <a class="page-link"
+                   href="?{{ scans_page_param }}={{ scans_page_obj.previous_page_number }}">‹</a>
+              </li>
+            {% endif %}
+
+            {% for p in scans_page_obj.paginator.page_range %}
+              <li class="page-item {% if p == scans_page_obj.number %}active{% endif %}">
+                <a class="page-link"
+                   href="?{{ scans_page_param }}={{ p }}">{{ p }}</a>
+              </li>
+            {% endfor %}
+
+            {% if scans_page_obj.has_next %}
+              <li class="page-item">
+                <a class="page-link"
+                   href="?{{ scans_page_param }}={{ scans_page_obj.next_page_number }}">›</a>
+              </li>
+            {% endif %}
+          </ul>
+        </nav>
+      {% endif %}
+
     {% else %}
       <div class="text-muted">No scans available for this document.</div>
     {% endif %}

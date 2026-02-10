@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}
+  {% if object %}FRS DB | Replace scan{% else %}FRS DB | Add scan{% endif %}
+{% endblock %}
+
+{% block content %}
+{% include "includes/navbar.html" %}
+
+<div class="container mt-3" style="max-width: 1100px;">
+
+  <div class="d-flex justify-content-between align-items-start mb-2">
+    <div>
+      <h1 class="h4 mb-0">
+        {% if object %}Replace scan{% else %}Add scan{% endif %}
+      </h1>
+
+      <div class="small text-muted">Person: {{ person_obj }}</div>
+      <div class="small text-muted">Doc ID: {{ doc_obj.pk }}</div>
+      {% if object %}
+        <div class="small text-muted">Scan ID: {{ object.pk }}</div>
+      {% endif %}
+    </div>
+
+    <div class="d-flex gap-2">
+      <button type="submit" form="scanForm" class="btn btn-primary btn-sm">
+        Save
+      </button>
+
+      <a class="btn btn-outline-secondary btn-sm"
+         href="{% url 'persons:doc_edit' person_obj.pk doc_obj.pk %}">
+        Back to document
+      </a>
+    </div>
+  </div>
+
+  <div class="card shadow-lg">
+    <div class="card-body">
+
+      <form id="scanForm"
+            method="post"
+            enctype="multipart/form-data"
+            novalidate>
+        {% csrf_token %}
+
+        {% include "includes/scan_upload_form.html" %}
+
+      </form>
+
+    </div>
+  </div>
+
+</div>
+{% endblock %}
