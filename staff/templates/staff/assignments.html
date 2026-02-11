@@ -37,83 +37,129 @@
           </span>
         </div>
 
-        <div class="card-body p-0">
+      <div class="card-body p-0">
           <div class="table-responsive">
-            <table class="table table-striped table-hover mb-0 align-middle">
-              <thead class="table-light">
-                <tr>
-                  <th>Position</th>
-                  <th style="width:220px;">Shift type</th>
-                  <th style="width:90px;">Qty</th>
-                  <th style="width:110px;">Occupied</th>
-                  <th style="width:110px;">Vacant</th>
-                  <th>Assigned persons</th>
-                  <th style="width:380px;">Add assignment</th>
-                </tr>
-              </thead>
-
-              <tbody>
-                {% for row in rows %}
-                  {% with item=row.item form=row.form %}
+              <table class="table table-bordered table-striped table-hover
+              align-middle mb-0">
+                  <thead class="table-light text-center">
                   <tr>
-                    <td>{{ item.position.name_long }}</td>
-                    <td>{{ item.shift_type.shift_type_short }}</td>
-                    <td>{{ item.position_qty }}</td>
-                    <td>{{ item.occupied }}</td>
-                    <td>{{ item.vacant }}</td>
+                      <th style="width:30px;">Position</th>
+                      <th style="width:10px;">Shift</th>
+                      <th style="width:10px;">Qty</th>
+                      <th style="width:10px;">Hired</th>
+                      <th style="width:10px;">Vacant</th>
+                      <th>Assigned persons</th>
+                      <th style="width:420px;">Add assignment</th>
+                  </tr>
+                  </thead>
 
-                    <td>
-                      {% if item.assignments.all %}
-                        <ul class="mb-0">
-                          {% for a in item.assignments.all %}
-                            <li class="d-flex justify-content-between align-items-center gap-2">
-                              <span>{{ a.person }}</span>
+      <tbody>
+        {% for row in rows %}
+          {% with item=row.item form=row.form %}
+          <tr>
 
-                              <form method="post" action="{% url 'staff:assignment_release' a.pk %}">
-                                {% csrf_token %}
-                                <input type="hidden" name="released_on" value="">
-                                <button class="btn btn-sm btn-outline-danger"
-                                        type="submit"
-                                        onclick="return askReleaseDate(this);">
-                                  Release
-                                </button>
-                              </form>
-                            </li>
-                          {% endfor %}
-                        </ul>
-                      {% else %}
-                        <span class="text-muted">No assignments</span>
-                      {% endif %}
-                    </td>
+            <!-- POSITION -->
+            <td class="fw-semibold text-center">
+              {{ item.position.name_long }}
+            </td>
 
-                    <td>
-                      <form method="post" action="{% url 'staff:assignment_add' item.pk %}">
+            <!-- SHIFT -->
+            <td class="text-center">
+              {{ item.shift_type.shift_type_short }}
+            </td>
+
+            <!-- QTY -->
+            <td class="text-center">
+              {{ item.position_qty }}
+            </td>
+
+            <!-- HIRED -->
+            <td class="text-center">
+              <span class="badge bg-success">
+                {{ item.occupied }}
+              </span>
+            </td>
+
+            <!-- VACANT -->
+            <td class="text-center">
+              <span class="badge bg-warning text-dark">
+                {{ item.vacant }}
+              </span>
+            </td>
+
+            <!-- ASSIGNED PERSONS -->
+            <td>
+              {% if item.assignments.all %}
+                <ul class="list-group list-group-flush">
+                  {% for a in item.assignments.all %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+
+                      <span>
+                        {{ a.person }}
+                      </span>
+
+                      <form method="post"
+                            action="{% url 'staff:assignment_release' a.pk %}"
+                            class="ms-2">
                         {% csrf_token %}
-                        <div class="d-flex gap-2 align-items-center">
-                          <div style="min-width: 220px;">
-                            {{ form.person }}
-                          </div>
-
-                          <div style="width: 160px;">
-                            {{ form.assigned_on }}
-                          </div>
-
-                          <button class="btn btn-outline-primary" type="submit">Assign</button>
-                        </div>
+                        <input type="hidden" name="released_on" value="">
+                        <button class="btn btn-sm btn-outline-danger"
+                                type="submit"
+                                onclick="return askReleaseDate(this);">
+                          Release
+                        </button>
                       </form>
-                    </td>
 
-                  </tr>
-                  {% endwith %}
-                {% empty %}
-                  <tr>
-                    <td colspan="7" class="text-center p-4 text-muted">No plan items.</td>
-                  </tr>
-                {% endfor %}
-              </tbody>
-            </table>
-          </div>
-        </div>
+                    </li>
+                  {% endfor %}
+                </ul>
+              {% else %}
+                <span class="text-muted">No assignments</span>
+              {% endif %}
+            </td>
+
+            <!-- ADD ASSIGNMENT -->
+            <td>
+              <form method="post"
+                    action="{% url 'staff:assignment_add' item.pk %}">
+                {% csrf_token %}
+
+                <div class="row g-2 align-items-center">
+
+                  <div class="col-md-5">
+                    {{ form.person }}
+                  </div>
+
+                  <div class="col-md-4">
+                    {{ form.assigned_on }}
+                  </div>
+
+                  <div class="col-md-3 d-grid">
+                    <button class="btn btn-primary btn-sm"
+                            type="submit">
+                      Assign
+                    </button>
+                  </div>
+
+                </div>
+
+              </form>
+            </td>
+
+          </tr>
+          {% endwith %}
+        {% empty %}
+          <tr>
+            <td colspan="7" class="text-center py-4 text-muted">
+              No plan items.
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
       </div>
     {% endif %}
   {% endif %}

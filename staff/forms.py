@@ -1,3 +1,4 @@
+# staff/forms.py
 from __future__ import annotations
 
 from datetime import date
@@ -105,7 +106,6 @@ class AssignmentCreateForm(forms.Form):
         required=True,
     )
 
-    # NEW: date-only field for assignment
     assigned_on = forms.DateField(
         required=False,
         initial=date.today,
@@ -120,7 +120,7 @@ class AssignmentCreateForm(forms.Form):
         self.company = company
         self.item = item
         self.fields["person"].queryset = Person.objects.all().order_by(
-            "family_name", "first_name"
+            "first_name", "family_name"
         )
 
     def clean(self):
@@ -130,19 +130,35 @@ class AssignmentCreateForm(forms.Form):
         if self.company is None or self.item is None or person is None:
             return cleaned
 
+        # =========================
+        # NEW RULE: position.type vs person.residency_status
+        # Position.type: "local" / "expat" / "any"
+        # Person.residency_status: "LOCAL" / "EXPAT"
+        # =========================
+        pos_type = (self.item.position.type or "").strip().lower()
+
+        if pos_type in ("local", "expat"):
+            required_status = "LOCAL" if pos_type == "local" else "EXPAT"
+            if person.residency_status != required_status:
+                raise ValidationError(
+                    f"This position requires {required_status} staff."
+                )
+        # if "any" -> no restriction
+
+        # capacity rule
         occupied = StaffingAssignment.objects.filter(
             staffing_plan_item=self.item, is_active=True
         ).count()
         if occupied >= self.item.position_qty:
             raise ValidationError("No vacant slots for this position/shift type.")
 
+        # duplicate in same slot
         if StaffingAssignment.objects.filter(
             staffing_plan_item=self.item, person=person, is_active=True
         ).exists():
             raise ValidationError("This person is already assigned to this slot.")
 
-        # NEW RULE:
-        # if a person has any active assignment anywhere -> cannot assign again
+        # person cannot have any other active assignment
         if StaffingAssignment.objects.filter(person=person, is_active=True).exists():
             raise ValidationError(
                 "This person already has an active assignment and cannot be assigned again."
