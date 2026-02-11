@@ -28,6 +28,7 @@ from .views import (
     AssignmentsView,
     AssignmentCreateView,
     AssignmentReleaseView,
+    AssignmentReleaseAllView,
 )
 
 app_name = "staff"
@@ -113,5 +114,10 @@ urlpatterns = [
         "assignments/<int:assignment_pk>/release/",
         AssignmentReleaseView.as_view(),
         name="assignment_release",
+    ),
+    path(
+        "assignments/release-all/",
+        AssignmentReleaseAllView.as_view(),
+        name="assignment_release_all",
     ),
 ]

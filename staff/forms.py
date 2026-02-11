@@ -105,6 +105,14 @@ class AssignmentCreateForm(forms.Form):
         required=True,
     )
 
+    # NEW: date-only field for assignment
+    assigned_on = forms.DateField(
+        required=False,
+        initial=date.today,
+        widget=forms.DateInput(attrs={"type": "date", "class": "form-control"}),
+        label="Assigned on",
+    )
+
     def __init__(
         self, *args, company=None, item: StaffingPlanItem | None = None, **kwargs
     ):
@@ -133,6 +141,13 @@ class AssignmentCreateForm(forms.Form):
         ).exists():
             raise ValidationError("This person is already assigned to this slot.")
 
+        # NEW RULE:
+        # if a person has any active assignment anywhere -> cannot assign again
+        if StaffingAssignment.objects.filter(person=person, is_active=True).exists():
+            raise ValidationError(
+                "This person already has an active assignment and cannot be assigned again."
+            )
+
         return cleaned
 
     def save(self) -> StaffingAssignment:
@@ -146,10 +161,7 @@ class AssignmentCreateForm(forms.Form):
             person=person,
             defaults={"is_active": True, "terminated_on": None},
         )
-        if created and emp.hired_on is None:
-            emp.hired_on = date.today()
-            emp.save(update_fields=["hired_on"])
-        elif (not created) and emp.hired_on is None:
+        if emp.hired_on is None:
             emp.hired_on = date.today()
             emp.save(update_fields=["hired_on"])
 

@@ -1,6 +1,8 @@
 # staff/views.py
 from __future__ import annotations
 
+from datetime import datetime
+
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db import IntegrityError, transaction
@@ -34,6 +36,38 @@ class ActiveCompanyMixin:
 
 class StaffHomeView(LoginRequiredMixin, TemplateView):
     template_name = "staff/index.html"
+
+
+# =========================
+# Helpers for date->datetime
+# =========================
+def _parse_date_from_post(value: str | None):
+    if not value:
+        return None
+    try:
+        return datetime.strptime(value, "%Y-%m-%d").date()
+    except ValueError:
+        return None
+
+
+def _combine_date_with_now_time(chosen_date, now_dt):
+    """
+    chosen_date: datetime.date
+    now_dt: aware datetime (timezone.now())
+    returns aware datetime with chosen_date and time from now_dt
+    """
+    dt = datetime(
+        year=chosen_date.year,
+        month=chosen_date.month,
+        day=chosen_date.day,
+        hour=now_dt.hour,
+        minute=now_dt.minute,
+        second=now_dt.second,
+        microsecond=now_dt.microsecond,
+    )
+    if timezone.is_aware(now_dt):
+        return timezone.make_aware(dt, timezone.get_current_timezone())
+    return dt
 
 
 # =========================
@@ -325,9 +359,6 @@ class ShiftDeactivateView(LoginRequiredMixin, ActiveCompanyMixin, View):
 # Staffing Plans (with rules)
 # =========================
 def _plan_has_active_assignments(plan: StaffingPlan) -> bool:
-    """
-    True if there is at least one active StaffingAssignment linked to this plan.
-    """
     return StaffingAssignment.objects.filter(
         is_active=True,
         staffing_plan_item__staffing_plan=plan,
@@ -346,12 +377,9 @@ class StaffingPlanListView(LoginRequiredMixin, ActiveCompanyMixin, ListView):
             return StaffingPlan.objects.none()
 
         qs = StaffingPlan.objects.filter(company=company)
-
-        # показать только активные если show != all
         if self.request.GET.get("show") != "all":
             qs = qs.filter(is_active=True)
 
-        # Требование: активный всегда первым, остальные по updated_at desc
         return qs.order_by("-is_active", "-updated_at")
 
     def get_context_data(self, **kwargs):
@@ -421,19 +449,13 @@ class StaffingPlanBaseMixin(ActiveCompanyMixin):
             )
 
         with transaction.atomic():
-            # сохраняем план и items
             self.object = form.save()
             items_formset.instance = self.object
             items_formset.save()
 
-            # ---------
-            # Правила активности (после сохранения, но в одной транзакции)
-            # ---------
             desired_active = bool(self.object.is_active)
 
             if desired_active:
-                # хотим сделать этот план активным -> надо выключить другие активные,
-                # но если "текущий активный другой" имеет назначения — запрещаем переключение
                 other_active = (
                     StaffingPlan.objects.filter(company=company, is_active=True)
                     .exclude(pk=self.object.pk)
@@ -441,7 +463,6 @@ class StaffingPlanBaseMixin(ActiveCompanyMixin):
                     .first()
                 )
                 if other_active and _plan_has_active_assignments(other_active):
-                    # откатываем активность обратно
                     StaffingPlan.objects.filter(pk=self.object.pk).update(
                         is_active=False
                     )
@@ -455,16 +476,12 @@ class StaffingPlanBaseMixin(ActiveCompanyMixin):
                         self.get_context_data(form=form, items_formset=items_formset)
                     )
 
-                # можно активировать — деактивируем остальные
                 StaffingPlan.objects.filter(company=company, is_active=True).exclude(
                     pk=self.object.pk
                 ).update(is_active=False)
 
             else:
-                # хотим сделать план неактивным -> запрещаем, если есть активные назначения
                 if _plan_has_active_assignments(self.object):
-                    # вернуть активность как была (если план был активным до запроса — пользователь пытался снять)
-                    # безопасно: просто оставим is_active=True
                     StaffingPlan.objects.filter(pk=self.object.pk).update(
                         is_active=True
                     )
@@ -497,12 +514,6 @@ class StaffingPlanUpdateView(LoginRequiredMixin, StaffingPlanBaseMixin, UpdateVi
 
 
 class StaffingPlanActivateView(LoginRequiredMixin, ActiveCompanyMixin, View):
-    """
-    Activate a plan for the company:
-    - only one active plan allowed
-    - if current active plan has assignments -> block (because it would be deactivated)
-    """
-
     def post(self, request: HttpRequest, pk: int) -> HttpResponse:
         company = self.get_active_company()
         if company is None:
@@ -538,11 +549,6 @@ class StaffingPlanActivateView(LoginRequiredMixin, ActiveCompanyMixin, View):
 
 
 class StaffingPlanDeactivateView(LoginRequiredMixin, ActiveCompanyMixin, View):
-    """
-    Deactivate (soft) a staffing plan:
-    - запрещено, если у плана есть активные назначения
-    """
-
     def post(self, request: HttpRequest, pk: int) -> HttpResponse:
         company = self.get_active_company()
         if company is None:
@@ -557,7 +563,6 @@ class StaffingPlanDeactivateView(LoginRequiredMixin, ActiveCompanyMixin, View):
                 return redirect(f"{reverse('staff:staffing_plans_list')}?show=all")
             return redirect("staff:staffing_plans_list")
 
-        # ключевой фикс: считаем только АКТИВНЫЕ назначения по этому плану
         if _plan_has_active_assignments(obj):
             messages.error(request, "Cannot deactivate: plan has active assignments.")
             if request.GET.get("show") == "all":
@@ -649,9 +654,23 @@ class AssignmentCreateView(LoginRequiredMixin, ActiveCompanyMixin, View):
                 messages.error(request, err)
             return redirect("staff:assignments")
 
+        assigned_on = form.cleaned_data.get("assigned_on")  # date | None
+        now_dt = timezone.now()
+        assigned_at_dt = (
+            _combine_date_with_now_time(assigned_on, now_dt) if assigned_on else now_dt
+        )
+
         try:
             with transaction.atomic():
-                form.save()
+                assignment = form.save()
+
+                # ensure we set assigned_at using chosen date (date-only) + current time
+                assignment.assigned_at = assigned_at_dt
+                assignment.released_at = None
+                assignment.is_active = True
+                assignment.save(
+                    update_fields=["assigned_at", "released_at", "is_active"]
+                )
         except IntegrityError:
             messages.error(request, "This person is already assigned to this slot.")
             return redirect("staff:assignments")
@@ -668,12 +687,58 @@ class AssignmentReleaseView(LoginRequiredMixin, ActiveCompanyMixin, View):
             return redirect("staff:assignments")
 
         a = get_object_or_404(StaffingAssignment, pk=assignment_pk, company=company)
+
+        released_on = _parse_date_from_post(request.POST.get("released_on"))
+        now_dt = timezone.now()
+        released_at_dt = (
+            _combine_date_with_now_time(released_on, now_dt) if released_on else now_dt
+        )
+
         if a.is_active:
             a.is_active = False
-            a.released_at = timezone.now()
+            a.released_at = released_at_dt
             a.save(update_fields=["is_active", "released_at"])
             messages.success(request, "Released.")
         else:
             messages.info(request, "Already inactive.")
+
+        return redirect("staff:assignments")
+
+
+class AssignmentReleaseAllView(LoginRequiredMixin, ActiveCompanyMixin, View):
+    def post(self, request: HttpRequest) -> HttpResponse:
+        company = self.get_active_company()
+        if company is None:
+            messages.error(request, "Active company is not selected.")
+            return redirect("staff:assignments")
+
+        # work only with current ACTIVE plan of this company
+        plan = (
+            StaffingPlan.objects.filter(company=company, is_active=True)
+            .order_by("-updated_at")
+            .first()
+        )
+        if plan is None:
+            messages.error(request, "No active staffing plan found.")
+            return redirect("staff:assignments")
+
+        released_on = _parse_date_from_post(request.POST.get("released_on"))
+        now_dt = timezone.now()
+        released_at_dt = (
+            _combine_date_with_now_time(released_on, now_dt) if released_on else now_dt
+        )
+
+        with transaction.atomic():
+            qs = StaffingAssignment.objects.filter(
+                company=company,
+                is_active=True,
+                staffing_plan_item__staffing_plan=plan,
+            )
+            updated = qs.update(is_active=False, released_at=released_at_dt)
+
+        if updated:
+            messages.success(request, f"Released all ({updated}).")
+        else:
+            messages.info(request, "No active assignments to release.")
 
         return redirect("staff:assignments")
