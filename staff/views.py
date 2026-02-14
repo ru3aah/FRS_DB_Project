@@ -207,18 +207,19 @@ class StaffShiftMembershipView(LoginRequiredMixin, ActiveCompanyMixin, TemplateV
         company = self.get_active_company()
         ctx["active_company"] = company
 
-        # ВАЖНО: под шаблон staff.html
-        ctx["rows"] = []
-        ctx["unassigned"] = []
-        ctx["shifts"] = []
-        ctx["plan"] = None
-
         if company is None:
+            ctx["plan"] = None
+            ctx["shift_groups"] = []
+            ctx["unassigned_rows"] = []
+            ctx["shifts"] = []
             return ctx
 
         plan = _get_active_plan(company)
         ctx["plan"] = plan
         if plan is None:
+            ctx["shift_groups"] = []
+            ctx["unassigned_rows"] = []
+            ctx["shifts"] = []
             return ctx
 
         # shifts: алфавит по shift_number
@@ -229,43 +230,20 @@ class StaffShiftMembershipView(LoginRequiredMixin, ActiveCompanyMixin, TemplateV
         )
         ctx["shifts"] = shifts
 
-        rows, _ = _get_people_from_active_plan(company, plan)
+        rows, _person_ids = _get_people_from_active_plan(company, plan)
+
+        assigned_rows: list[dict] = []
+        unassigned_rows: list[dict] = []
+        for r in rows:
+            m = r.get("membership")
+            if m is not None and m.shift_id:
+                assigned_rows.append(r)
+            else:
+                unassigned_rows.append(r)
 
         def _row_sort_key(r: dict):
             p: Person = r["person"]
             pos: Position | None = r.get("position")
-            m: ShiftMembership | None = r.get("membership")
-
-            shift_num = ""
-            if m is not None and m.shift_id and getattr(m, "shift", None) is not None:
-                shift_num = m.shift.shift_number or ""
-
-            # порядок: shift -> position -> family -> first -> second
-            return (
-                shift_num.lower(),
-                ((pos.name_long or "") if pos else "").lower(),
-                (p.family_name or "").lower(),
-                (p.first_name or "").lower(),
-                (p.second_name or "").lower(),
-            )
-
-        assigned: list[dict] = []
-        unassigned: list[dict] = []
-
-        for r in rows:
-            m = r.get("membership")
-            if m is not None and m.shift_id:
-                assigned.append(r)
-            else:
-                unassigned.append(r)
-
-        # assigned: чтобы regroup в шаблоне шёл по алфавиту shift_number
-        assigned_sorted = sorted(assigned, key=_row_sort_key)
-
-        # unassigned: в конце, по position -> fio
-        def _unassigned_sort_key(r: dict):
-            p: Person = r["person"]
-            pos: Position | None = r.get("position")
             return (
                 ((pos.name_long or "") if pos else "").lower(),
                 (p.family_name or "").lower(),
@@ -273,8 +251,27 @@ class StaffShiftMembershipView(LoginRequiredMixin, ActiveCompanyMixin, TemplateV
                 (p.second_name or "").lower(),
             )
 
-        ctx["rows"] = assigned_sorted
-        ctx["unassigned"] = sorted(unassigned, key=_unassigned_sort_key)
+        # группируем по shifts (в порядке shifts)
+        shift_groups = []
+        for sh in shifts:
+            group_rows = [
+                r
+                for r in assigned_rows
+                if r.get("membership") is not None
+                and r["membership"].shift_id == sh.shift_id
+            ]
+            if not group_rows:
+                continue
+
+            shift_groups.append(
+                {
+                    "shift": sh,
+                    "rows": sorted(group_rows, key=_row_sort_key),
+                }
+            )
+
+        ctx["shift_groups"] = shift_groups
+        ctx["unassigned_rows"] = sorted(unassigned_rows, key=_row_sort_key)
         return ctx
 
 
