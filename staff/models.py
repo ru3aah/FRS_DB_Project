@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from django.db import models
 from django.db.models import Q
 
@@ -105,6 +107,14 @@ class ShiftType(models.Model):
 
     shift_days_off = models.PositiveSmallIntegerField(
         help_text="Number of consecutive off days after the shift"
+    )
+
+    # NEW: anchor date for rotation calculations
+    # Used by roster to know "who is on duty today".
+    anchor_date = models.DateField(
+        blank=True,
+        null=True,
+        help_text="Rotation anchor date (first day when shift #1 is on duty).",
     )
 
     is_active = models.BooleanField(
@@ -316,10 +326,8 @@ class StaffEmployment(models.Model):
 
     class Meta:
         db_table = "staff_employments"
-        # FIX: person_id не поле модели; сортируем по FK person
         ordering = ["-is_active", "company", "person"]
         constraints = [
-            # FIX: разрешаем историю, но запрещаем >1 активного employment для (company, person)
             models.UniqueConstraint(
                 fields=["company", "person"],
                 condition=Q(is_active=True),
@@ -334,10 +342,6 @@ class StaffEmployment(models.Model):
 class StaffingAssignment(models.Model):
     """
     Occupies a slot inside a StaffingPlanItem with a concrete Person.
-
-    'Occupied' is derived:
-      occupied_count = assignments.filter(is_active=True).count()
-      vacant_count   = position_qty - occupied_count
     """
 
     staffing_assignment_id = models.BigAutoField(primary_key=True)
@@ -381,3 +385,167 @@ class StaffingAssignment(models.Model):
             f"{self.person} -> {self.staffing_plan_item} ("
             f"{'active' if self.is_active else 'inactive'})"
         )
+
+
+# =========================
+# Base distribution by shifts (A/B/C)
+# =========================
+
+
+class ShiftMembership(models.Model):
+    """
+    Base distribution: Person belongs to ONE Shift (A/B/C...) within Company.
+    Used later to generate monthly roster.
+    """
+
+    shift_membership_id = models.BigAutoField(primary_key=True)
+
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name="shift_memberships",
+    )
+
+    person = models.ForeignKey(
+        Person,
+        on_delete=models.CASCADE,
+        related_name="shift_memberships",
+    )
+
+    shift = models.ForeignKey(
+        Shift,
+        on_delete=models.PROTECT,
+        related_name="memberships",
+    )
+
+    is_active = models.BooleanField(default=True)
+
+    assigned_at = models.DateTimeField(auto_now_add=True)
+    released_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        db_table = "staff_shift_memberships"
+        ordering = ["-is_active", "-assigned_at"]
+        constraints = [
+            # Only one active membership for (company, person)
+            models.UniqueConstraint(
+                fields=["company", "person"],
+                condition=Q(is_active=True),
+                name="uq_shift_membership_company_person_active",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.person} -> {self.shift} ({'active' if self.is_active else 'inactive'})"
+
+
+class StaffAbsence(models.Model):
+    """
+    Absences for roster (sick leave / vacation / day-off etc.).
+    """
+
+    ABSENCE_TYPE_CHOICES = (
+        ("sick", "Sick leave"),
+        ("vac", "Vacation"),
+        ("off", "Day off"),
+        ("other", "Other"),
+    )
+
+    absence_id = models.BigAutoField(primary_key=True)
+
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name="staff_absences",
+    )
+
+    person = models.ForeignKey(
+        Person,
+        on_delete=models.CASCADE,
+        related_name="absences",
+    )
+
+    absence_type = models.CharField(
+        max_length=8,
+        choices=ABSENCE_TYPE_CHOICES,
+        default="other",
+    )
+
+    date_from = models.DateField()
+    date_to = models.DateField()
+
+    note = models.CharField(max_length=255, blank=True, default="")
+
+    is_active = models.BooleanField(default=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "staff_absences"
+        ordering = ["-is_active", "-created_at"]
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(date_to__gte=models.F("date_from")),
+                name="ck_absence_date_to_gte_from",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.person} absence {self.date_from}..{self.date_to}"
+
+
+class RosterOverride(models.Model):
+    """
+    One-day replacement / override for roster (temporary change).
+    Example: on 2026-03-10 person A replaced by person B for a plan item.
+    """
+
+    override_id = models.BigAutoField(primary_key=True)
+
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name="roster_overrides",
+    )
+
+    day = models.DateField(db_index=True)
+
+    staffing_plan_item = models.ForeignKey(
+        StaffingPlanItem,
+        on_delete=models.CASCADE,
+        related_name="roster_overrides",
+    )
+
+    replaced_person = models.ForeignKey(
+        Person,
+        on_delete=models.PROTECT,
+        related_name="roster_overrides_replaced",
+        blank=True,
+        null=True,
+        help_text="Optional: who is replaced (can be empty)",
+    )
+
+    replacement_person = models.ForeignKey(
+        Person,
+        on_delete=models.PROTECT,
+        related_name="roster_overrides_replacement",
+        help_text="Who works instead",
+    )
+
+    note = models.CharField(max_length=255, blank=True, default="")
+    is_active = models.BooleanField(default=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "staff_roster_overrides"
+        ordering = ["-is_active", "-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["company", "day", "staffing_plan_item", "replacement_person"],
+                name="uq_roster_override_company_day_item_person",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.day} | {self.staffing_plan_item} -> {self.replacement_person}"

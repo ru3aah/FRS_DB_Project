@@ -8,6 +8,10 @@ from .models import (
     StaffingPlanItem,
     StaffEmployment,
     StaffingAssignment,
+    # NEW
+    ShiftMembership,
+    StaffAbsence,
+    RosterOverride,
 )
 
 
@@ -38,6 +42,7 @@ class ShiftTypeAdmin(admin.ModelAdmin):
         "shift_type_name",
         "shift_days_on",
         "shift_days_off",
+        "anchor_date",
         "is_active",
         "updated_at",
     )
@@ -78,8 +83,15 @@ class StaffingPlanItemInline(admin.TabularInline):
 
 @admin.register(StaffingPlan)
 class StaffingPlanAdmin(admin.ModelAdmin):
-    list_display = ("staffing_plan_id", "company", "is_active", "updated_at")
+    list_display = (
+        "staffing_plan_id",
+        "company",
+        "staffing_plan_name",
+        "is_active",
+        "updated_at",
+    )
     list_filter = ("company", "is_active")
+    search_fields = ("staffing_plan_name",)
     ordering = ("company", "-is_active", "-updated_at")
     readonly_fields = ("created_at", "updated_at")
     inlines = [StaffingPlanItemInline]
@@ -116,3 +128,78 @@ class StaffingAssignmentAdmin(admin.ModelAdmin):
     list_filter = ("company", "is_active")
     search_fields = ("person__first_name", "person__family_name")
     ordering = ("company", "-is_active", "-assigned_at")
+
+
+# =========================
+# NEW: Base shift distribution
+# =========================
+@admin.register(ShiftMembership)
+class ShiftMembershipAdmin(admin.ModelAdmin):
+    list_display = (
+        "shift_membership_id",
+        "company",
+        "person",
+        "shift",
+        "is_active",
+        "assigned_at",
+        "released_at",
+    )
+    list_filter = ("company", "is_active", "shift")
+    search_fields = ("person__first_name", "person__second_name", "person__family_name")
+    ordering = ("company", "-is_active", "-assigned_at")
+    readonly_fields = ("assigned_at",)
+
+
+# =========================
+# NEW: Absences
+# =========================
+@admin.register(StaffAbsence)
+class StaffAbsenceAdmin(admin.ModelAdmin):
+    list_display = (
+        "absence_id",
+        "company",
+        "person",
+        "absence_type",
+        "date_from",
+        "date_to",
+        "is_active",
+        "created_at",
+    )
+    list_filter = ("company", "absence_type", "is_active")
+    search_fields = (
+        "person__first_name",
+        "person__second_name",
+        "person__family_name",
+        "note",
+    )
+    ordering = ("company", "-is_active", "-created_at")
+    readonly_fields = ("created_at",)
+
+
+# =========================
+# NEW: Roster overrides
+# =========================
+@admin.register(RosterOverride)
+class RosterOverrideAdmin(admin.ModelAdmin):
+    list_display = (
+        "override_id",
+        "company",
+        "day",
+        "staffing_plan_item",
+        "replaced_person",
+        "replacement_person",
+        "is_active",
+        "created_at",
+    )
+    list_filter = ("company", "day", "is_active")
+    search_fields = (
+        "replacement_person__first_name",
+        "replacement_person__second_name",
+        "replacement_person__family_name",
+        "replaced_person__first_name",
+        "replaced_person__second_name",
+        "replaced_person__family_name",
+        "note",
+    )
+    ordering = ("company", "-is_active", "-created_at")
+    readonly_fields = ("created_at",)

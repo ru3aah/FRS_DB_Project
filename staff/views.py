@@ -1,7 +1,8 @@
 # staff/views.py
 from __future__ import annotations
 
-from datetime import datetime
+from calendar import monthrange
+from datetime import date, datetime, timedelta
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -15,6 +16,8 @@ from django.views import View
 from django.views.generic import CreateView, ListView, TemplateView, UpdateView
 
 from companies.models import Company
+from persons.models import Person
+
 from .forms import AssignmentCreateForm, StaffingPlanForm, StaffingPlanItemFormSet
 from .models import (
     Position,
@@ -23,6 +26,9 @@ from .models import (
     StaffingPlan,
     StaffingPlanItem,
     StaffingAssignment,
+    ShiftMembership,
+    StaffAbsence,
+    RosterOverride,
 )
 
 
@@ -31,11 +37,244 @@ class ActiveCompanyMixin:
         company_id = self.request.session.get("active_company_id")
         if not company_id:
             return None
-        return Company.objects.filter(pk=company_id, is_active=True).first()
+        # ВАЖНО: не фильтруем is_active тут, иначе получишь None при любой рассинхронизации.
+        return Company.objects.filter(pk=company_id).first()
 
 
 class StaffHomeView(LoginRequiredMixin, TemplateView):
     template_name = "staff/index.html"
+
+
+def _get_active_plan(company: Company) -> StaffingPlan | None:
+    return (
+        StaffingPlan.objects.filter(company=company, is_active=True)
+        .order_by("-updated_at")
+        .first()
+    )
+
+
+def _get_people_from_active_plan(
+    company: Company, plan: StaffingPlan
+) -> tuple[list[dict], set[int]]:
+    """
+    Возвращает:
+      - rows: [{person, position, assignment, membership}]
+      - person_ids: set[int]
+    Берём только людей, которые реально назначены в активный staffing plan (active assignments).
+    """
+    assignments = list(
+        StaffingAssignment.objects.filter(
+            company=company,
+            is_active=True,
+            staffing_plan_item__staffing_plan=plan,
+        )
+        .select_related("person", "staffing_plan_item__position")
+        .order_by(
+            "staffing_plan_item__position__name_long",
+            "person__family_name",
+            "person__first_name",
+            "person__second_name",
+        )
+    )
+
+    person_ids: set[int] = set()
+    person_to_position: dict[int, Position] = {}
+    person_to_assignment: dict[int, StaffingAssignment] = {}
+    person_to_person: dict[int, Person] = {}
+
+    for a in assignments:
+        pid = a.person_id
+        if pid in person_ids:
+            # по твоим правилам такого быть не должно, но не ломаем страницу
+            continue
+        person_ids.add(pid)
+        person_to_position[pid] = a.staffing_plan_item.position
+        person_to_assignment[pid] = a
+        person_to_person[pid] = a.person
+
+    memberships = list(
+        ShiftMembership.objects.filter(
+            company=company, is_active=True, person_id__in=person_ids
+        ).select_related("shift", "shift__shift_type")
+    )
+    person_to_membership: dict[int, ShiftMembership] = {
+        m.person_id: m for m in memberships
+    }
+
+    rows: list[dict] = []
+    # ВАЖНО: делаем стабильный порядок (чтобы сортировки работали предсказуемо)
+    for pid in sorted(person_ids):
+        p = person_to_person.get(pid)
+        if p is None:
+            continue
+        rows.append(
+            {
+                "person": p,
+                "position": person_to_position.get(pid),
+                "assignment": person_to_assignment.get(pid),
+                "membership": person_to_membership.get(pid),
+            }
+        )
+
+    return rows, person_ids
+
+
+class StaffShiftMembershipView(LoginRequiredMixin, ActiveCompanyMixin, TemplateView):
+    """
+    Staff page (staff.html) — базовое распределение людей по сменам (A/B/C...).
+    ВАЖНО: показываем ТОЛЬКО людей, которые назначены в активный staffing plan (active assignments).
+    """
+
+    template_name = "staff/staff.html"
+
+    def post(self, request: HttpRequest, *args, **kwargs) -> HttpResponse:
+        company = self.get_active_company()
+        if company is None:
+            messages.error(request, "Active company is not selected.")
+            return redirect("staff:staff_members")
+
+        plan = (
+            StaffingPlan.objects.filter(company=company, is_active=True)
+            .order_by("-updated_at")
+            .first()
+        )
+        if plan is None:
+            messages.error(request, "No active staffing plan found.")
+            return redirect("staff:staff_members")
+
+        person_id_raw = (request.POST.get("person_id") or "").strip()
+        shift_id_raw = (request.POST.get("shift_id") or "").strip()
+
+        try:
+            person_id = int(person_id_raw)
+        except ValueError:
+            messages.error(request, "Invalid person.")
+            return redirect("staff:staff_members")
+
+        # person должен быть в активном staffing plan (active assignments)
+        in_plan = StaffingAssignment.objects.filter(
+            company=company,
+            is_active=True,
+            staffing_plan_item__staffing_plan=plan,
+            person_id=person_id,
+        ).exists()
+        if not in_plan:
+            messages.error(
+                request, "This person is not assigned in the active staffing plan."
+            )
+            return redirect("staff:staff_members")
+
+        shift = None
+        if shift_id_raw:
+            try:
+                shift_id = int(shift_id_raw)
+            except ValueError:
+                messages.error(request, "Invalid shift.")
+                return redirect("staff:staff_members")
+
+            shift = get_object_or_404(Shift, pk=shift_id, company=company)
+
+        now_dt = timezone.now()
+
+        with transaction.atomic():
+            # закрываем текущую активную membership (если была)
+            ShiftMembership.objects.filter(
+                company=company,
+                person_id=person_id,
+                is_active=True,
+            ).update(is_active=False, released_at=now_dt)
+
+            # если shift выбран — создаём новую активную membership
+            if shift is not None:
+                ShiftMembership.objects.create(
+                    company=company,
+                    person_id=person_id,
+                    shift=shift,
+                    is_active=True,
+                )
+
+        if shift is None:
+            messages.success(request, "Shift assignment cleared.")
+        else:
+            messages.success(request, f"Assigned to shift {shift.shift_number}.")
+
+        return redirect("staff:staff_members")
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+
+        company = self.get_active_company()
+        ctx["active_company"] = company
+
+        if company is None:
+            ctx["plan"] = None
+            ctx["shift_groups"] = []
+            ctx["unassigned_rows"] = []
+            ctx["shifts"] = []
+            return ctx
+
+        plan = _get_active_plan(company)
+        ctx["plan"] = plan
+        if plan is None:
+            ctx["shift_groups"] = []
+            ctx["unassigned_rows"] = []
+            ctx["shifts"] = []
+            return ctx
+
+        # ВАЖНО: сортировка смен по АЛФАВИТУ имени смены (shift_number)
+        # и сразу тянем shift_type (для отображения в current shift, если нужно)
+        shifts = list(
+            Shift.objects.filter(company=company, is_active=True)
+            .select_related("shift_type")
+            .order_by("shift_number")
+        )
+        ctx["shifts"] = shifts
+
+        rows, _person_ids = _get_people_from_active_plan(company, plan)
+
+        # split rows into assigned/unassigned
+        assigned_rows: list[dict] = []
+        unassigned_rows: list[dict] = []
+        for r in rows:
+            m = r.get("membership")
+            if m is not None and m.shift_id:
+                assigned_rows.append(r)
+            else:
+                unassigned_rows.append(r)
+
+        def _row_sort_key(r: dict):
+            p: Person = r["person"]
+            pos: Position | None = r.get("position")
+            # требование: сортируем внутри смены по позициям, потом по именам
+            return (
+                ((pos.name_long or "") if pos else "").lower(),
+                (p.family_name or "").lower(),
+                (p.first_name or "").lower(),
+                (p.second_name or "").lower(),
+            )
+
+        # group assigned rows by shift, in order of `shifts` (уже отсортированы)
+        shift_groups = []
+        for sh in shifts:
+            group_rows = [
+                r
+                for r in assigned_rows
+                if r.get("membership") is not None
+                and r["membership"].shift_id == sh.shift_id
+            ]
+            if not group_rows:
+                continue
+
+            shift_groups.append(
+                {
+                    "shift": sh,
+                    "rows": sorted(group_rows, key=_row_sort_key),
+                }
+            )
+
+        ctx["shift_groups"] = shift_groups
+        ctx["unassigned_rows"] = sorted(unassigned_rows, key=_row_sort_key)
+        return ctx
 
 
 # =========================
@@ -51,11 +290,6 @@ def _parse_date_from_post(value: str | None):
 
 
 def _combine_date_with_now_time(chosen_date, now_dt):
-    """
-    chosen_date: datetime.date
-    now_dt: aware datetime (timezone.now())
-    returns aware datetime with chosen_date and time from now_dt
-    """
     dt = datetime(
         year=chosen_date.year,
         month=chosen_date.month,
@@ -68,6 +302,203 @@ def _combine_date_with_now_time(chosen_date, now_dt):
     if timezone.is_aware(now_dt):
         return timezone.make_aware(dt, timezone.get_current_timezone())
     return dt
+
+
+# =========================
+# Roster (basic monthly view)
+# =========================
+def _get_month_start_end(month_str: str | None) -> tuple[date, date]:
+    today = timezone.localdate()
+    if month_str:
+        try:
+            y, m = month_str.split("-")
+            first = date(int(y), int(m), 1)
+        except Exception:
+            first = date(today.year, today.month, 1)
+    else:
+        first = date(today.year, today.month, 1)
+
+    last_day = monthrange(first.year, first.month)[1]
+    last = date(first.year, first.month, last_day)
+    return first, last
+
+
+def _is_absent(
+    absences_by_person: dict[int, list[tuple[date, date]]], person_id: int, day: date
+) -> bool:
+    for d1, d2 in absences_by_person.get(person_id, []):
+        if d1 <= day <= d2:
+            return True
+    return False
+
+
+def _active_shift_for_day(
+    shift_type: ShiftType, shifts_ordered: list[Shift], day: date
+) -> Shift | None:
+    if not shift_type.anchor_date:
+        return None
+    if not shifts_ordered:
+        return None
+
+    on = int(shift_type.shift_days_on)
+    off = int(shift_type.shift_days_off)
+    cycle = on + off
+
+    if on <= 0:
+        return None
+
+    groups = cycle // on if cycle % on == 0 else 1
+    if groups <= 0:
+        groups = 1
+
+    delta = (day - shift_type.anchor_date).days
+    if delta < 0:
+        block_index = -((abs(delta) + on - 1) // on)
+    else:
+        block_index = delta // on
+
+    idx = block_index % groups
+    idx = idx % len(shifts_ordered)
+    return shifts_ordered[idx]
+
+
+class StaffRosterView(LoginRequiredMixin, ActiveCompanyMixin, TemplateView):
+    template_name = "staff/roster.html"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+
+        company = self.get_active_company()
+        ctx["active_company"] = company
+
+        month_str = self.request.GET.get("month")
+        month_start, month_end = _get_month_start_end(month_str)
+        ctx["month_start"] = month_start
+        ctx["month_end"] = month_end
+        ctx["month_param"] = f"{month_start.year:04d}-{month_start.month:02d}"
+
+        if company is None:
+            ctx["days"] = []
+            ctx["rows"] = []
+            return ctx
+
+        plan = (
+            StaffingPlan.objects.filter(company=company, is_active=True)
+            .order_by("-updated_at")
+            .first()
+        )
+        ctx["plan"] = plan
+        if plan is None:
+            ctx["days"] = []
+            ctx["rows"] = []
+            return ctx
+
+        items = list(
+            StaffingPlanItem.objects.filter(staffing_plan=plan)
+            .select_related("position", "shift_type")
+            .order_by("position__name_long", "shift_type__shift_type_short")
+        )
+
+        active_assignments = list(
+            StaffingAssignment.objects.filter(
+                staffing_plan_item__staffing_plan=plan,
+                company=company,
+                is_active=True,
+            ).select_related("person", "staffing_plan_item")
+        )
+
+        persons_by_item: dict[int, list[Person]] = {}
+        for a in active_assignments:
+            persons_by_item.setdefault(a.staffing_plan_item_id, []).append(a.person)
+
+        shift_type_ids = sorted({it.shift_type_id for it in items})
+        shift_types = list(
+            ShiftType.objects.filter(company=company, pk__in=shift_type_ids).order_by(
+                "shift_type_short"
+            )
+        )
+        st_by_id = {st.shift_type_id: st for st in shift_types}
+
+        shifts_by_st: dict[int, list[Shift]] = {}
+        shifts_qs = (
+            Shift.objects.filter(
+                company=company, shift_type_id__in=shift_type_ids, is_active=True
+            )
+            .select_related("shift_type")
+            .order_by("shift_number")
+        )
+        for sh in shifts_qs:
+            shifts_by_st.setdefault(sh.shift_type_id, []).append(sh)
+
+        mem_qs = ShiftMembership.objects.filter(
+            company=company, is_active=True
+        ).select_related("shift", "person", "shift__shift_type")
+        person_shift: dict[int, Shift] = {m.person_id: m.shift for m in mem_qs}
+
+        abs_qs = StaffAbsence.objects.filter(company=company, is_active=True)
+        absences_by_person: dict[int, list[tuple[date, date]]] = {}
+        for ab in abs_qs:
+            absences_by_person.setdefault(ab.person_id, []).append(
+                (ab.date_from, ab.date_to)
+            )
+
+        ov_qs = RosterOverride.objects.filter(
+            company=company, is_active=True, day__gte=month_start, day__lte=month_end
+        ).select_related("replacement_person", "staffing_plan_item")
+        overrides: dict[tuple[date, int], list[Person]] = {}
+        for ov in ov_qs:
+            overrides.setdefault((ov.day, ov.staffing_plan_item_id), []).append(
+                ov.replacement_person
+            )
+
+        days = []
+        d = month_start
+        while d <= month_end:
+            days.append(d)
+            d += timedelta(days=1)
+        ctx["days"] = days
+
+        rows = []
+        for day in days:
+            day_entries = []
+            for it in items:
+                st = st_by_id.get(it.shift_type_id)
+                if not st:
+                    continue
+
+                active_shift = _active_shift_for_day(
+                    st, shifts_by_st.get(st.shift_type_id, []), day
+                )
+
+                base_people = persons_by_item.get(it.staffing_plan_item_id, [])
+
+                filtered = []
+                for p in base_people:
+                    sh = person_shift.get(p.person_id)
+                    if active_shift is not None:
+                        if sh is None or sh.shift_id != active_shift.shift_id:
+                            continue
+                    if _is_absent(absences_by_person, p.person_id, day):
+                        continue
+                    filtered.append(p)
+
+                ov_people = overrides.get((day, it.staffing_plan_item_id), [])
+                final_people = ov_people if ov_people else filtered
+
+                day_entries.append(
+                    {
+                        "item": it,
+                        "shift": active_shift,
+                        "people": final_people,
+                        "is_anchor_missing": st.anchor_date is None,
+                    }
+                )
+
+            rows.append({"day": day, "entries": day_entries})
+
+        ctx["rows"] = rows
+        ctx["shift_types"] = shift_types
+        return ctx
 
 
 # =========================
@@ -139,7 +570,7 @@ class PositionDeactivateView(LoginRequiredMixin, ActiveCompanyMixin, View):
     def post(self, request: HttpRequest, pk: int) -> HttpResponse:
         company = self.get_active_company()
         if company is None:
-            messages.error(request, "Active company is not selected.")
+            messages.error(self.request, "Active company is not selected.")
             return redirect("staff:positions_list")
 
         obj = get_object_or_404(Position, pk=pk, company=company)
@@ -195,6 +626,7 @@ class ShiftTypeCreateView(LoginRequiredMixin, ActiveCompanyMixin, CreateView):
         "shift_type_short",
         "shift_days_on",
         "shift_days_off",
+        "anchor_date",
         "is_active",
     ]
     success_url = reverse_lazy("staff:shift_types_list")
@@ -217,6 +649,7 @@ class ShiftTypeUpdateView(LoginRequiredMixin, ActiveCompanyMixin, UpdateView):
         "shift_type_short",
         "shift_days_on",
         "shift_days_off",
+        "anchor_date",
         "is_active",
     ]
     success_url = reverse_lazy("staff:shift_types_list")
@@ -356,7 +789,7 @@ class ShiftDeactivateView(LoginRequiredMixin, ActiveCompanyMixin, View):
 
 
 # =========================
-# Staffing Plans (with rules)
+# Staffing Plans + Assignments (ниже — твоя текущая логика, без изменений)
 # =========================
 def _plan_has_active_assignments(plan: StaffingPlan) -> bool:
     return StaffingAssignment.objects.filter(
@@ -578,9 +1011,6 @@ class StaffingPlanDeactivateView(LoginRequiredMixin, ActiveCompanyMixin, View):
         return redirect("staff:staffing_plans_list")
 
 
-# =========================
-# Assignments
-# =========================
 class AssignmentsView(LoginRequiredMixin, ActiveCompanyMixin, TemplateView):
     template_name = "staff/assignments.html"
 
@@ -654,7 +1084,7 @@ class AssignmentCreateView(LoginRequiredMixin, ActiveCompanyMixin, View):
                 messages.error(request, err)
             return redirect("staff:assignments")
 
-        assigned_on = form.cleaned_data.get("assigned_on")  # date | None
+        assigned_on = form.cleaned_data.get("assigned_on")
         now_dt = timezone.now()
         assigned_at_dt = (
             _combine_date_with_now_time(assigned_on, now_dt) if assigned_on else now_dt
@@ -663,8 +1093,6 @@ class AssignmentCreateView(LoginRequiredMixin, ActiveCompanyMixin, View):
         try:
             with transaction.atomic():
                 assignment = form.save()
-
-                # ensure we set assigned_at using chosen date (date-only) + current time
                 assignment.assigned_at = assigned_at_dt
                 assignment.released_at = None
                 assignment.is_active = True
@@ -712,7 +1140,6 @@ class AssignmentReleaseAllView(LoginRequiredMixin, ActiveCompanyMixin, View):
             messages.error(request, "Active company is not selected.")
             return redirect("staff:assignments")
 
-        # work only with current ACTIVE plan of this company
         plan = (
             StaffingPlan.objects.filter(company=company, is_active=True)
             .order_by("-updated_at")

@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% block title %}FRS DB | Roster{% endblock %}
+
+{% block content %}
+{% include "includes/navbar.html" %}
+
+<div class="container mt-4">
+
+  <!-- Top navigation -->
+  <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+    <div class="d-flex gap-2 flex-wrap">
+      <a class="btn btn-outline-secondary" href="{% url 'staff:index' %}">
+        Staff menu
+      </a>
+      <a class="btn btn-outline-secondary" href="{% url 'staff:assignments' %}">
+        Assignments
+      </a>
+    </div>
+
+    <!-- Month selector -->
+    <form method="get" class="d-flex align-items-center gap-2">
+      <label class="small text-muted">Month:</label>
+      <input type="month"
+             name="month"
+             value="{{ month_param }}"
+             class="form-control form-control-sm">
+      <button class="btn btn-sm btn-outline-primary" type="submit">
+        Go
+      </button>
+    </form>
+  </div>
+
+  {% if not active_company %}
+    <div class="alert alert-warning">
+      Active company is not selected.
+    </div>
+  {% elif not plan %}
+    <div class="alert alert-warning">
+      No active staffing plan found.
+    </div>
+  {% else %}
+
+  <div class="card shadow-sm">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <strong>
+        Roster for {{ active_company.name }}
+      </strong>
+      <span class="text-muted small">
+        {{ month_start|date:"F Y" }} |
+        Plan: {{ plan.staffing_plan_name|default:"—" }}
+      </span>
+    </div>
+
+    <div class="card-body p-0">
+
+      <div class="table-responsive">
+        <table class="table table-bordered table-sm align-middle mb-0">
+          <thead class="table-light text-center">
+            <tr>
+              <th style="width:120px;">Date</th>
+              <th>Details</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            {% for row in rows %}
+              <tr>
+                <td class="text-center fw-semibold">
+                  {{ row.day|date:"d M Y" }}
+                </td>
+
+                <td>
+                  {% for entry in row.entries %}
+                    <div class="mb-2 p-2 border rounded bg-light-subtle">
+
+                      <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                          <strong>{{ entry.item.position.name_long }}</strong>
+                          <span class="text-muted small">
+                            | {{ entry.item.shift_type.shift_type_short }}
+                            {% if entry.shift %}
+                              | Shift {{ entry.shift.shift_number }}
+                            {% endif %}
+                          </span>
+                        </div>
+
+                        {% if entry.is_anchor_missing %}
+                          <span class="badge bg-warning text-dark">
+                            No anchor date
+                          </span>
+                        {% endif %}
+                      </div>
+
+                      <div class="mt-2">
+                        {% if entry.people %}
+                          <ul class="mb-0">
+                            {% for p in entry.people %}
+                              <li>
+                                {{ p.first_name }} {{ p.second_name }} {{ p.family_name }}
+                              </li>
+                            {% endfor %}
+                          </ul>
+                        {% else %}
+                          <span class="text-muted small">
+                            No staff on duty
+                          </span>
+                        {% endif %}
+                      </div>
+
+                    </div>
+                  {% empty %}
+                    <span class="text-muted">No plan items.</span>
+                  {% endfor %}
+                </td>
+              </tr>
+            {% empty %}
+              <tr>
+                <td colspan="2" class="text-center p-4 text-muted">
+                  No data.
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+    </div>
+  </div>
+
+  {% endif %}
+
+</div>
+{% endblock %}

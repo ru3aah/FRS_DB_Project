@@ -3,11 +3,13 @@ from __future__ import annotations
 from django.shortcuts import redirect
 from django.urls import reverse
 
+from companies.models import Company
+
 
 class ActiveCompanyRequiredMiddleware:
     """
-    Требует выбранную компанию (active_company_id в session) для большинства страниц.
-    Home (/) остаётся доступным всегда.
+    Requires selected active company for most pages.
+    Makes request.active_company available everywhere.
     """
 
     def __init__(self, get_response):
@@ -16,9 +18,9 @@ class ActiveCompanyRequiredMiddleware:
     def __call__(self, request):
         path = request.path
 
-        # Разрешаем всегда (публичные страницы/служебные пути)
+        # Public / system paths
         if (
-            path == "/"  # Home должен открываться всегда
+            path == "/"
             or path.startswith("/users/login/")
             or path.startswith("/users/logout/")
             or path.startswith("/admin/")
@@ -28,14 +30,25 @@ class ActiveCompanyRequiredMiddleware:
         ):
             return self.get_response(request)
 
-        # Если пользователь не залогинен — пусть работает стандартная логика
         user = getattr(request, "user", None)
         if not user or not user.is_authenticated:
             return self.get_response(request)
 
-        # Для остальных страниц требуем выбранную компанию
-        active_company_id = request.session.get("active_company_id")
-        if not active_company_id:
+        company_id = request.session.get("active_company_id")
+        if not company_id:
             return redirect(reverse("users:login"))
+
+        company = Company.objects.filter(
+            pk=company_id,
+            is_active=True,
+        ).first()
+
+        if not company:
+            # cleanup broken session
+            request.session.pop("active_company_id", None)
+            return redirect(reverse("users:login"))
+
+        # attach to request
+        request.active_company = company
 
         return self.get_response(request)

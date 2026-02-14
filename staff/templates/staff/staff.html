@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+{% block title %}FRS DB | Staff{% endblock %}
+
+{% block content %}
+{% include "includes/navbar.html" %}
+
+<div class="container mt-4">
+
+  <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+    <div class="d-flex gap-2 flex-wrap">
+      <a class="btn btn-outline-secondary" href="{% url 'staff:index' %}">Staff menu</a>
+      <a class="btn btn-outline-secondary" href="{% url 'staff:shifts_list' %}">Shifts</a>
+      <a class="btn btn-outline-secondary" href="{% url 'staff:assignments' %}">Assignments</a>
+      <a class="btn btn-outline-secondary" href="{% url 'staff:roster' %}">Roster</a>
+    </div>
+  </div>
+
+  {% if not active_company %}
+    <div class="alert alert-warning">Active company is not selected.</div>
+  {% else %}
+
+  <div class="card">
+    <div class="card-header">
+      <strong>Staff / Shift distribution</strong>
+      <div class="text-muted small">Base assignment of each employee to a shift</div>
+    </div>
+
+    <div class="card-body">
+
+      <div class="table-responsive">
+        <table class="table table-sm table-striped table-hover align-middle mb-0">
+          <thead class="table-light">
+            <tr>
+              <th style="width:30%">Person</th>
+              <th style="width:20%">Position</th>
+              <th style="width:10%">Residency</th>
+              <th style="width:15%">Current shift</th>
+              <th style="width:25%">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+
+            {# --- ASSIGNED (GROUPED BY SHIFT) --- #}
+            {% for g in shift_groups %}
+              <tr class="table-primary">
+                <td colspan="5">
+                  <strong>Shift {{ g.shift.shift_number }}</strong>
+                </td>
+              </tr>
+
+              {% for r in g.rows %}
+                <tr>
+                  <td>
+                    {{ r.person.first_name }} {{ r.person.second_name }} {{ r.person.family_name }}
+                  </td>
+
+                  <td>
+                    {% if r.position %}{{ r.position.name_long }}{% else %}<span class="text-muted">—</span>{% endif %}
+                  </td>
+
+                  <td>
+                    {{ r.person.residency_status }}
+                  </td>
+
+                  <td>
+                    {% if r.membership and r.membership.shift %}
+                      {{ r.membership.shift.shift_number }}
+                    {% else %}
+                      <span class="text-muted">—</span>
+                    {% endif %}
+                  </td>
+
+                  <td>
+                    <form method="post" action="{% url 'staff:staff_members' %}" class="d-flex gap-2">
+                      {% csrf_token %}
+                      <input type="hidden" name="person_id" value="{{ r.person.person_id }}">
+                      <select name="shift_id" class="form-select form-select-sm">
+                        <option value="">—</option>
+                        {% for s in shifts %}
+                          <option value="{{ s.shift_id }}"
+                            {% if r.membership and r.membership.shift and r.membership.shift.shift_id == s.shift_id %}selected{% endif %}>
+                            {{ s.shift_number }}
+                          </option>
+                        {% endfor %}
+                      </select>
+                      <button class="btn btn-sm btn-primary" type="submit">Save</button>
+                    </form>
+                  </td>
+                </tr>
+              {% endfor %}
+            {% endfor %}
+
+            {# --- UNASSIGNED (ALWAYS AT THE END) --- #}
+            {% if unassigned_rows %}
+              <tr class="table-secondary">
+                <td colspan="5">
+                  <strong>Unassigned</strong>
+                </td>
+              </tr>
+
+              {% for r in unassigned_rows %}
+                <tr>
+                  <td>
+                    {{ r.person.first_name }} {{ r.person.second_name }} {{ r.person.family_name }}
+                  </td>
+
+                  <td>
+                    {% if r.position %}{{ r.position.name_long }}{% else %}<span class="text-muted">—</span>{% endif %}
+                  </td>
+
+                  <td>
+                    {{ r.person.residency_status }}
+                  </td>
+
+                  <td class="text-muted">—</td>
+
+                  <td>
+                    <form method="post" action="{% url 'staff:staff_members' %}" class="d-flex gap-2">
+                      {% csrf_token %}
+                      <input type="hidden" name="person_id" value="{{ r.person.person_id }}">
+                      <select name="shift_id" class="form-select form-select-sm">
+                        <option value="">—</option>
+                        {% for s in shifts %}
+                          <option value="{{ s.shift_id }}">{{ s.shift_number }}</option>
+                        {% endfor %}
+                      </select>
+                      <button class="btn btn-sm btn-primary" type="submit">Save</button>
+                    </form>
+                  </td>
+                </tr>
+              {% endfor %}
+            {% endif %}
+
+          </tbody>
+        </table>
+      </div>
+
+    </div>
+  </div>
+
+  {% endif %}
+</div>
+
+{% endblock %}

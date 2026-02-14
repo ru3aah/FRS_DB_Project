@@ -1,8 +1,12 @@
+# staff/urls.py
 from django.urls import path
 from django.views.generic import RedirectView
 
 from .views import (
     StaffHomeView,
+    StaffRosterView,
+    # NEW: Shift membership (base shift distribution)
+    StaffShiftMembershipView,
     # Positions
     PositionListView,
     PositionCreateView,
@@ -36,12 +40,22 @@ app_name = "staff"
 urlpatterns = [
     path("", StaffHomeView.as_view(), name="index"),
     # -----------------
+    # Roster
+    # -----------------
+    path("roster/", StaffRosterView.as_view(), name="roster"),
+    # -----------------
+    # Staff → Shift distribution (NEW)
+    # -----------------
+    path("staff-members/", StaffShiftMembershipView.as_view(), name="staff_members"),
+    # -----------------
     # Positions
     # -----------------
     path("positions/", PositionListView.as_view(), name="positions_list"),
     path("positions/add/", PositionCreateView.as_view(), name="positions_add"),
     path(
-        "positions/<int:pk>/edit/", PositionUpdateView.as_view(), name="positions_edit"
+        "positions/<int:pk>/edit/",
+        PositionUpdateView.as_view(),
+        name="positions_edit",
     ),
     path(
         "positions/<int:pk>/delete/",
@@ -75,7 +89,9 @@ urlpatterns = [
     path("shifts/add/", ShiftCreateView.as_view(), name="shifts_add"),
     path("shifts/<int:pk>/edit/", ShiftUpdateView.as_view(), name="shifts_edit"),
     path(
-        "shifts/<int:pk>/delete/", ShiftDeactivateView.as_view(), name="shifts_delete"
+        "shifts/<int:pk>/delete/",
+        ShiftDeactivateView.as_view(),
+        name="shifts_delete",
     ),
     # -----------------
     # Staffing plans

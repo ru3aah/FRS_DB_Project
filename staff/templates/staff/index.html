@@ -62,13 +62,24 @@
             </a>
         </div>
 
-        <!-- Staff -->
+        <!-- Roster -->
         <div class="col-md-3">
-            <a href="{% url 'under_construction' %}"
+            <a href="{% url 'staff:roster' %}"
+               class="card text-decoration-none h-100 shadow-sm">
+                <div class="card-body text-center">
+                    <h5 class="card-title">Roster</h5>
+                    <p class="card-text text-muted">Duty schedule & shift distribution</p>
+                </div>
+            </a>
+        </div>
+
+        <!-- Staff (NOW -> Shift Membership management) -->
+        <div class="col-md-3">
+            <a href="{% url 'staff:staff_members' %}"
                class="card text-decoration-none h-100 shadow-sm">
                 <div class="card-body text-center">
                     <h5 class="card-title">Staff</h5>
-                    <p class="card-text text-muted">Personnel management</p>
+                    <p class="card-text text-muted">Manage shift distribution (A/B/C)</p>
                 </div>
             </a>
         </div>
