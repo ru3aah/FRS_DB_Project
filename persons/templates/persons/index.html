@@ -17,7 +17,6 @@
           Add person
         </a>
 
-        <!-- Company filters will be implemented later via staff app -->
         <button class="btn btn-outline-secondary" type="button" disabled>
           Show for company
         </button>
@@ -28,19 +27,15 @@
     {% endif %}
   </div>
 
-  <div class="text-muted small mb-3">
-    Company filters will be added later (via staff app).
-  </div>
-
   <table class="table table-striped align-middle">
     <thead>
-      <tr>
+      <tr class="text-sm-center" >
         <th>#</th>
         <th>PID</th>
         <th>First name</th>
         <th>Second name</th>
         <th>Family name</th>
-        <th>DOB</th>
+        <th>Date Of Birth</th>
         <th>Gender</th>
         <th>Nationality</th>
         <th class="text-end">Actions</th>
@@ -48,7 +43,7 @@
     </thead>
     <tbody>
       {% for person in persons %}
-        <tr>
+        <tr class="text-sm-center">
           <td>{{ page_obj.start_index|add:forloop.counter0 }}</td>
           <td>{{ person.pk }}</td>
           <td>{{ person.first_name }}</td>
@@ -58,7 +53,7 @@
           <td>{{ person.get_gender_display }}</td>
           <td>
             {% if person.nationality %}
-              {{ person.nationality.code3 }} {{ person.nationality.short_name }}
+              {{ person.nationality.code3 }}
             {% else %}
               <span class="text-muted">—</span>
             {% endif %}
