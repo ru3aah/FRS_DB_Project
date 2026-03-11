@@ -15,11 +15,10 @@ from companies.models import Company
 from .forms import IDTypeForm, PersonForm, PersonIDForm, PersonIDScanForm
 from .models import IDType, Person, PersonID, PersonIDScan
 
+
 # -----------------------
 # Common mixins
 # -----------------------
-
-
 class NavbarContextMixin:
     """
     Adds common context variables used by includes/navbar.html:
@@ -56,10 +55,42 @@ class HRAccessMixin(LoginRequiredMixin, UserPassesTestMixin):
 
 
 # -----------------------
+# Duplicate check helpers
+# -----------------------
+def _find_duplicate_person(
+    *,
+    first_name: str,
+    second_name: str,
+    family_name: str,
+    dob,
+    exclude_person_id: int | None = None,
+) -> Person | None:
+    """
+    Returns existing Person with same (first+second+family+dob), or None.
+    Case-insensitive for names.
+    """
+    first_name = (first_name or "").strip()
+    second_name = (second_name or "").strip()
+    family_name = (family_name or "").strip()
+
+    if not (first_name and second_name and family_name and dob):
+        return None
+
+    qs = Person.objects.filter(
+        first_name__iexact=first_name,
+        second_name__iexact=second_name,
+        family_name__iexact=family_name,
+        dob=dob,
+    )
+    if exclude_person_id:
+        qs = qs.exclude(person_id=exclude_person_id)
+
+    return qs.first()
+
+
+# -----------------------
 # Persons
 # -----------------------
-
-
 class PersonListView(NavbarContextMixin, HRAccessMixin, ListView):
     model = Person
     template_name = "persons/index.html"
@@ -85,6 +116,25 @@ class PersonCreateView(NavbarContextMixin, HRAccessMixin, CreateView):
     form_class = PersonForm
 
     def form_valid(self, form):
+        cd = form.cleaned_data
+
+        existing = _find_duplicate_person(
+            first_name=cd.get("first_name"),
+            second_name=cd.get("second_name"),
+            family_name=cd.get("family_name"),
+            dob=cd.get("dob"),
+            exclude_person_id=None,
+        )
+
+        dup_confirm = (self.request.POST.get("dup_confirm") or "").strip() == "1"
+
+        # Duplicate found, not confirmed -> show modal, do NOT save
+        if existing is not None and not dup_confirm:
+            ctx = self.get_context_data(form=form)
+            ctx["dup_person"] = existing
+            ctx["show_dup_modal"] = True
+            return self.render_to_response(ctx)
+
         response = super().form_valid(form)
         messages.success(self.request, "Person created and saved.")
         return response
@@ -94,7 +144,6 @@ class PersonCreateView(NavbarContextMixin, HRAccessMixin, CreateView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        # docs disabled until person exists
         ctx["docs_page_obj"] = None
         ctx["docs_is_paginated"] = False
         ctx["docs_page_param"] = "docs_page"
@@ -110,6 +159,26 @@ class PersonUpdateView(NavbarContextMixin, HRAccessMixin, UpdateView):
     DOCS_PAGE_PARAM = "docs_page"
 
     def form_valid(self, form):
+        cd = form.cleaned_data
+        exclude_id = getattr(self.object, "person_id", None)
+
+        existing = _find_duplicate_person(
+            first_name=cd.get("first_name"),
+            second_name=cd.get("second_name"),
+            family_name=cd.get("family_name"),
+            dob=cd.get("dob"),
+            exclude_person_id=exclude_id,
+        )
+
+        dup_confirm = (self.request.POST.get("dup_confirm") or "").strip() == "1"
+
+        # Duplicate found, not confirmed -> show modal, do NOT save
+        if existing is not None and not dup_confirm:
+            ctx = self.get_context_data(form=form)
+            ctx["dup_person"] = existing
+            ctx["show_dup_modal"] = True
+            return self.render_to_response(ctx)
+
         response = super().form_valid(form)
         messages.success(self.request, "Changes saved.")
         return response
@@ -141,14 +210,7 @@ class PersonUpdateView(NavbarContextMixin, HRAccessMixin, UpdateView):
 # -----------------------
 # PersonID (Documents) CRUD
 # -----------------------
-
-
 class PersonIDBaseMixin(NavbarContextMixin, HRAccessMixin):
-    """
-    Ensures we always work within a specific Person.
-    URL contains: person_pk
-    """
-
     person_obj: Person
 
     def dispatch(self, request, *args, **kwargs):
@@ -248,14 +310,7 @@ class PersonIDDeleteView(PersonIDBaseMixin, DeleteView):
 # -----------------------
 # Scans create / update / delete
 # -----------------------
-
-
 class PersonIDScanBaseMixin(PersonIDBaseMixin):
-    """
-    Ensures doc exists and belongs to person.
-    URL contains: person_pk, doc_pk
-    """
-
     doc_obj: PersonID
 
     def dispatch(self, request, *args, **kwargs):
@@ -340,8 +395,6 @@ class PersonIDScanDeleteView(PersonIDBaseMixin, DeleteView):
 # -----------------------
 # Reference: IDType
 # -----------------------
-
-
 class IDTypeCreateView(NavbarContextMixin, HRAccessMixin, CreateView):
     model = IDType
     form_class = IDTypeForm

@@ -93,12 +93,13 @@ class ShiftType(models.Model):
 
     shift_type_name = models.CharField(
         max_length=255,
-        help_text="Long name for this shift type (e.g. Rotation 14/14, Night Shift)",
+        help_text="Long name for this shift type (e.g. Rotation 14/14, " "Night Shift)",
     )
 
     shift_type_short = models.CharField(
         max_length=10,
-        help_text="Short code up to 10 chars (letters/digits/signs), e.g. 14/14, NGT, D1",
+        help_text="Short code up to 10 chars (letters/digits/signs), "
+        "e.g. 14/14, NGT, D1",
     )
 
     shift_days_on = models.PositiveSmallIntegerField(
@@ -202,7 +203,10 @@ class Shift(models.Model):
 
     def __str__(self) -> str:
         st = self.shift_type
-        return f"{self.shift_number} — {st.shift_type_short} ({st.shift_days_on}/{st.shift_days_off})"
+        return (
+            f"{self.shift_number} — {st.shift_type_short} ("
+            f"{st.shift_days_on}/{st.shift_days_off})"
+        )
 
 
 class StaffingPlan(models.Model):
@@ -318,7 +322,7 @@ class StaffEmployment(models.Model):
 
     is_active = models.BooleanField(
         default=True,
-        help_text="Active employment (person is currently hired by this company).",
+        help_text="Active employment (person is currently hired by this " "company).",
     )
 
     created_at = models.DateTimeField(auto_now_add=True)
@@ -336,7 +340,10 @@ class StaffEmployment(models.Model):
         ]
 
     def __str__(self) -> str:
-        return f"{self.person} @ {self.company} ({'active' if self.is_active else 'inactive'})"
+        return (
+            f"{self.person} @ {self.company} ("
+            f"{'active' if self.is_active else 'inactive'})"
+        )
 
 
 class StaffingAssignment(models.Model):
@@ -436,7 +443,10 @@ class ShiftMembership(models.Model):
         ]
 
     def __str__(self) -> str:
-        return f"{self.person} -> {self.shift} ({'active' if self.is_active else 'inactive'})"
+        return (
+            f"{self.person} -> {self.shift} ("
+            f"{'active' if self.is_active else 'inactive'})"
+        )
 
 
 class StaffAbsence(models.Model):

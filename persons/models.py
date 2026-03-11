@@ -1,4 +1,5 @@
 from django.db import models
+from companies.models import Company
 
 
 class Person(models.Model):
@@ -10,6 +11,16 @@ class Person(models.Model):
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    # reference to company inputted the person
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name="persons",
+        blank=True,
+        null=True,
+        help_text="Company that inputted the person data",
+    )
 
     first_name = models.CharField(max_length=255)
     second_name = models.CharField(max_length=255)
@@ -55,7 +66,7 @@ class Person(models.Model):
         ]
 
     def __str__(self) -> str:
-        return f"{self.first_name} {self.second_name} {self.family_name}".strip()
+        return (f"{self.first_name} {self.second_name} " f"{self.family_name}").strip()
 
 
 class Country(models.Model):
