@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from datetime import date
+
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models import Q
 
@@ -20,7 +23,6 @@ class Position(models.Model):
 
     position_id = models.BigAutoField(primary_key=True)
 
-    # Company scope (nullable for painless migration; later can be made required)
     company = models.ForeignKey(
         Company,
         on_delete=models.CASCADE,
@@ -75,13 +77,22 @@ class Position(models.Model):
 
 class ShiftType(models.Model):
     """
-    Reference table for shift patterns/types.
-    Example: 14/14, 28/28, 7/7 etc.
+    Shift pattern / rotation type.
+    Examples:
+      A = 7/14
+      B = 28/28
+      C = 2/2
+
+    Meaning:
+      shift_days_on  = consecutive work days
+      shift_days_off = consecutive off days
+
+    Valid only when off is divisible by on, so the cycle can be completed
+    by an integer number of sibling shifts.
     """
 
     shift_type_id = models.BigAutoField(primary_key=True)
 
-    # Company scope (nullable for painless migration; later can be made required)
     company = models.ForeignKey(
         Company,
         on_delete=models.CASCADE,
@@ -91,31 +102,27 @@ class ShiftType(models.Model):
         help_text="Company this shift type belongs to",
     )
 
+    code_letter = models.CharField(
+        max_length=2,
+        help_text="Letter code of pattern, e.g. A, B, C",
+    )
+
     shift_type_name = models.CharField(
         max_length=255,
-        help_text="Long name for this shift type (e.g. Rotation 14/14, Night Shift)",
+        help_text="Long name for this shift type (e.g. Rotation 7/14)",
     )
 
     shift_type_short = models.CharField(
         max_length=10,
-        help_text="Short code up to 10 chars (letters/digits/signs), "
-        "e.g. 14/14, NGT, D1",
+        help_text="Short pattern text, e.g. 7/14, 28/28, 2/2",
     )
 
     shift_days_on = models.PositiveSmallIntegerField(
-        help_text="Number of consecutive work days"
+        help_text="Number of consecutive work days",
     )
 
     shift_days_off = models.PositiveSmallIntegerField(
-        help_text="Number of consecutive off days after the shift"
-    )
-
-    # NEW: anchor date for rotation calculations
-    # Used by roster to know "who is on duty today".
-    anchor_date = models.DateField(
-        blank=True,
-        null=True,
-        help_text="Rotation anchor date (first day when shift #1 is on duty).",
+        help_text="Number of consecutive off days after work block",
     )
 
     is_active = models.BooleanField(
@@ -128,8 +135,12 @@ class ShiftType(models.Model):
 
     class Meta:
         db_table = "staff_shift_types"
-        ordering = ["shift_type_short"]
+        ordering = ["code_letter", "shift_type_short"]
         constraints = [
+            models.UniqueConstraint(
+                fields=["company", "code_letter"],
+                name="uq_staff_shift_type_company_code_letter",
+            ),
             models.UniqueConstraint(
                 fields=["company", "shift_type_short"],
                 name="uq_staff_shift_type_company_short",
@@ -139,29 +150,79 @@ class ShiftType(models.Model):
                 name="uq_staff_shift_type_company_name",
             ),
             models.UniqueConstraint(
-                fields=[
-                    "company",
-                    "shift_days_on",
-                    "shift_days_off",
-                    "shift_type_short",
-                ],
-                name="uq_shift_type_pattern_short_company",
+                fields=["company", "shift_days_on", "shift_days_off"],
+                name="uq_staff_shift_type_company_pattern",
             ),
         ]
 
+    def clean(self):
+        super().clean()
+
+        if not self.code_letter:
+            raise ValidationError({"code_letter": "Pattern code letter is required."})
+
+        self.code_letter = (self.code_letter or "").strip().upper()
+        if len(self.code_letter) > 2:
+            raise ValidationError(
+                {"code_letter": "Pattern code letter must be 1 or 2 characters."}
+            )
+
+        if self.shift_days_on <= 0:
+            raise ValidationError({"shift_days_on": "Work days must be > 0."})
+
+        if self.shift_days_off < 0:
+            raise ValidationError({"shift_days_off": "Off days must be >= 0."})
+
+        if self.shift_days_off % self.shift_days_on != 0:
+            raise ValidationError(
+                {
+                    "shift_days_off": (
+                        "Off days must be divisible by work days so the full cycle "
+                        "can be completed by an integer number of sibling shifts."
+                    )
+                }
+            )
+
+    def save(self, *args, **kwargs):
+        self.code_letter = (self.code_letter or "").strip().upper()
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
+    @property
+    def cycle_days(self) -> int:
+        return int(self.shift_days_on) + int(self.shift_days_off)
+
+    @property
+    def package_size(self) -> int:
+        """
+        Number of sibling shifts required to close one full cycle.
+        Example:
+          7/14 -> (7 + 14) / 7 = 3  => A1, A2, A3
+          28/28 -> (28 + 28) / 28 = 2 => B1, B2
+        """
+        return self.cycle_days // int(self.shift_days_on)
+
     def __str__(self) -> str:
-        return f"{self.shift_type_short} ({self.shift_days_on}/{self.shift_days_off})"
+        return (
+            f"{self.code_letter} | {self.shift_type_short} "
+            f"({self.shift_days_on}/{self.shift_days_off})"
+        )
 
 
 class Shift(models.Model):
     """
-    Reference table for actual shifts (e.g., A/B/C) that use a shift type pattern.
-    Example: Shift A uses type 14/14.
+    Concrete shift inside one shift pattern package.
+
+    Examples:
+      ShiftType A = 7/14  -> A1, A2, A3
+      ShiftType B = 28/28 -> B1, B2
+
+    anchor_date means:
+      first day when THIS concrete shift starts its own duty block.
     """
 
     shift_id = models.BigAutoField(primary_key=True)
 
-    # Company scope (nullable for painless migration; later can be made required)
     company = models.ForeignKey(
         Company,
         on_delete=models.CASCADE,
@@ -171,16 +232,26 @@ class Shift(models.Model):
         help_text="Company this shift belongs to",
     )
 
-    shift_number = models.CharField(
-        max_length=2,
-        help_text="Manual code (2 chars): letters or digits, e.g. A1, 01, B2",
-    )
-
     shift_type = models.ForeignKey(
         ShiftType,
         on_delete=models.PROTECT,
         related_name="shifts",
         help_text="Link to shift type (pattern)",
+    )
+
+    shift_no = models.PositiveSmallIntegerField(
+        help_text="Sequential number inside pattern package: 1, 2, 3 ...",
+    )
+
+    shift_number = models.CharField(
+        max_length=8,
+        help_text="Full shift code, generated from pattern code + shift_no, e.g. A1, A2, B1",
+    )
+
+    anchor_date = models.DateField(
+        blank=True,
+        null=True,
+        help_text="First day when this concrete shift starts its duty block.",
     )
 
     is_active = models.BooleanField(
@@ -193,19 +264,76 @@ class Shift(models.Model):
 
     class Meta:
         db_table = "staff_shifts"
-        ordering = ["shift_number", "shift_type__shift_type_short"]
+        ordering = ["shift_type__code_letter", "shift_no"]
         constraints = [
             models.UniqueConstraint(
-                fields=["company", "shift_number", "shift_type"],
-                name="uq_staff_shift_company_number_type_fk",
+                fields=["company", "shift_type", "shift_no"],
+                name="uq_staff_shift_company_type_no",
+            ),
+            models.UniqueConstraint(
+                fields=["company", "shift_number"],
+                name="uq_staff_shift_company_number",
             ),
         ]
 
+    def clean(self):
+        super().clean()
+
+        if self.shift_no <= 0:
+            raise ValidationError(
+                {"shift_no": "Shift number inside package must be > 0."}
+            )
+
+        if self.shift_type_id:
+            max_no = self.shift_type.package_size
+            if self.shift_no > max_no:
+                raise ValidationError(
+                    {
+                        "shift_no": (
+                            f"Shift number cannot exceed package size {max_no} "
+                            f"for pattern {self.shift_type.shift_type_short}."
+                        )
+                    }
+                )
+
+            expected_code = f"{self.shift_type.code_letter}{self.shift_no}"
+            self.shift_number = expected_code
+
+    def save(self, *args, **kwargs):
+        if self.shift_type_id and self.shift_no:
+            self.shift_number = f"{self.shift_type.code_letter}{self.shift_no}"
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
+    @property
+    def cycle_days(self) -> int:
+        return self.shift_type.cycle_days
+
+    @property
+    def days_on(self) -> int:
+        return int(self.shift_type.shift_days_on)
+
+    @property
+    def days_off(self) -> int:
+        return int(self.shift_type.shift_days_off)
+
+    def is_on_duty(self, day: date) -> bool:
+        """
+        Returns True when this concrete shift is on duty for the given date.
+
+        Formula:
+          (day - anchor_date) % cycle_days < days_on
+        """
+        if not self.anchor_date:
+            return False
+
+        delta_days = (day - self.anchor_date).days
+        return (delta_days % self.cycle_days) < self.days_on
+
     def __str__(self) -> str:
-        st = self.shift_type
         return (
-            f"{self.shift_number} — {st.shift_type_short} "
-            f"({st.shift_days_on}/{st.shift_days_off})"
+            f"{self.shift_number} — {self.shift_type.shift_type_short} "
+            f"({self.shift_type.shift_days_on}/{self.shift_type.shift_days_off})"
         )
 
 
@@ -281,7 +409,11 @@ class StaffingPlanItem(models.Model):
 
     class Meta:
         db_table = "staff_staffing_plan_items"
-        ordering = ["position__name_long", "shift_type__shift_type_short"]
+        ordering = [
+            "position__name_long",
+            "shift_type__code_letter",
+            "shift_type__shift_type_short",
+        ]
         constraints = [
             models.UniqueConstraint(
                 fields=["staffing_plan", "position", "shift_type"],
@@ -377,7 +509,7 @@ class StaffingAssignment(models.Model):
         Company,
         on_delete=models.CASCADE,
         related_name="staffing_assignments",
-        help_text="Redundant but удобный фильтр и контроль консистентности.",
+        help_text="Redundant but useful for filtering and consistency checks.",
     )
 
     is_active = models.BooleanField(default=True)
@@ -403,14 +535,18 @@ class StaffingAssignment(models.Model):
 
 
 # =========================
-# Base distribution by shifts (A/B/C)
+# Base distribution by shifts
 # =========================
 
 
 class ShiftMembership(models.Model):
     """
-    Base distribution: Person belongs to ONE Shift (A/B/C...) within Company.
-    Used later to generate monthly roster.
+    Base distribution: Person belongs to ONE concrete Shift inside Company.
+    Example:
+      Ivan -> A1
+      Petr -> A2
+      John -> A3
+    Used later to generate roster.
     """
 
     shift_membership_id = models.BigAutoField(primary_key=True)
@@ -513,7 +649,7 @@ class StaffAbsence(models.Model):
 
 class RosterOverride(models.Model):
     """
-    One-day replacement / override for roster (temporary change).
+    One-day replacement / override for roster.
     Example: on 2026-03-10 person A replaced by person B for a plan item.
     """
 

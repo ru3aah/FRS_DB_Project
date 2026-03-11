@@ -1,26 +1,11 @@
 {% extends "base.html" %}
-{% block title %}FRS DB | Shift form{% endblock %}
+{% block title %}FRS DB | Create shift package{% endblock %}
 
 {% block content %}
 {% include "includes/navbar.html" %}
 
 <div class="container mt-4">
   <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
-    <div>
-      <h1 class="m-0">
-        {% if object %}
-          Edit shift
-        {% else %}
-          Add one shift
-        {% endif %}
-      </h1>
-      {% if active_company %}
-        <div class="text-muted small mt-1">
-          {{ active_company.name }}
-        </div>
-      {% endif %}
-    </div>
-
     <div class="d-flex gap-2 flex-wrap">
       <a class="btn btn-outline-secondary" href="{% url 'staff:index' %}">
         Staff menu
@@ -31,9 +16,6 @@
       <a class="btn btn-outline-secondary" href="{% url 'staff:shift_types_list' %}">
         Shift types
       </a>
-      <a class="btn btn-primary" href="{% url 'staff:shifts_package_add' %}">
-        Create package
-      </a>
     </div>
   </div>
 
@@ -43,6 +25,11 @@
     </div>
   {% else %}
     <div class="card shadow-sm">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <strong>Create shift package</strong>
+        <span class="text-muted small">{{ active_company.name }}</span>
+      </div>
+
       <div class="card-body">
         <form method="post">
           {% csrf_token %}
@@ -71,59 +58,32 @@
             </div>
 
             <div class="col-md-4">
-              <label class="form-label" for="{{ form.shift_no.id_for_label }}">
-                Shift number inside package
+              <label class="form-label" for="{{ form.first_anchor_date.id_for_label }}">
+                First shift duty date
               </label>
-              {{ form.shift_no }}
-              {% if form.shift_no.errors %}
+              {{ form.first_anchor_date }}
+              {% if form.first_anchor_date.errors %}
                 <div class="text-danger small mt-1">
-                  {% for err in form.shift_no.errors %}
+                  {% for err in form.first_anchor_date.errors %}
                     <div>{{ err }}</div>
                   {% endfor %}
                 </div>
               {% endif %}
-              <div class="form-text">
-                Example: 1, 2, 3. Full code will be generated automatically as A1, A2, A3.
-              </div>
             </div>
 
-            <div class="col-md-4">
-              <label class="form-label" for="{{ form.anchor_date.id_for_label }}">
-                Anchor date
-              </label>
-              {{ form.anchor_date }}
-              {% if form.anchor_date.errors %}
-                <div class="text-danger small mt-1">
-                  {% for err in form.anchor_date.errors %}
-                    <div>{{ err }}</div>
-                  {% endfor %}
-                </div>
-              {% endif %}
-              <div class="form-text">
-                First day when this concrete shift starts its duty block.
-              </div>
-            </div>
-
-            <div class="col-12">
-              <div class="form-check">
+            <div class="col-md-4 d-flex align-items-end">
+              <div class="form-check mb-2">
                 {{ form.is_active }}
                 <label class="form-check-label" for="{{ form.is_active.id_for_label }}">
                   Active
                 </label>
               </div>
-              {% if form.is_active.errors %}
-                <div class="text-danger small mt-1">
-                  {% for err in form.is_active.errors %}
-                    <div>{{ err }}</div>
-                  {% endfor %}
-                </div>
-              {% endif %}
             </div>
           </div>
 
           <div class="mt-4 d-flex gap-2">
-            <button type="submit" class="btn btn-success">
-              Save
+            <button type="submit" class="btn btn-primary">
+              Create package
             </button>
             <a href="{% url 'staff:shifts_list' %}" class="btn btn-outline-secondary">
               Cancel

@@ -92,7 +92,6 @@ AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
 ]
 
-# ВАЖНО: чтобы не уходило на /accounts/profile/
 LOGIN_URL = "/users/login/"
 LOGIN_REDIRECT_URL = "/main/"
 LOGOUT_REDIRECT_URL = "/"

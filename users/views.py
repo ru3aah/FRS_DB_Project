@@ -19,22 +19,27 @@ class CustomLoginView(LoginView):
 
         if not getattr(user, "is_superuser", False):
             ok = CompanyMembership.objects.filter(
-                user=user, company=company, is_active=True
+                user=user,
+                company=company,
+                is_active=True,
             ).exists()
             if not ok:
                 form.add_error("company", "You do not have access to this company.")
                 return self.form_invalid(form)
 
+        response = super().form_valid(form)
+
         self.request.session["active_company_id"] = company.id
+        self.request.session.modified = True
+
         messages.success(self.request, "Welcome!")
-        return super().form_valid(form)
+        return response
 
 
 class CustomLogoutView(LogoutView):
     next_page = reverse_lazy("home")
 
     def get(self, request, *args, **kwargs):
-        # logout только POST; GET просто на home
         return redirect("home")
 
     def post(self, request, *args, **kwargs):

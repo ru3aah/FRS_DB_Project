@@ -1,4 +1,3 @@
-# staff/views.py
 from __future__ import annotations
 
 from calendar import monthrange
@@ -6,10 +5,11 @@ from datetime import date, datetime, timedelta
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.db.models import Count, Prefetch, Q
 from django.http import HttpRequest, HttpResponse
-from django.shortcuts import get_object_or_404, redirect
+from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
 from django.views import View
@@ -18,7 +18,14 @@ from django.views.generic import CreateView, ListView, TemplateView, UpdateView
 from companies.models import Company
 from persons.models import Person
 
-from .forms import AssignmentCreateForm, StaffingPlanForm, StaffingPlanItemFormSet
+from .forms import (
+    AssignmentCreateForm,
+    ShiftPackageCreateForm,
+    ShiftTypeForm,
+    StaffingPlanForm,
+    StaffingPlanItemFormSet,
+    evaluate_shift_pattern,
+)
 from .models import (
     Position,
     Shift,
@@ -37,7 +44,6 @@ class ActiveCompanyMixin:
         company_id = self.request.session.get("active_company_id")
         if not company_id:
             return None
-        # ВАЖНО: не фильтруем is_active тут, иначе получишь None при любой рассинхронизации.
         return Company.objects.filter(pk=company_id).first()
 
 
@@ -56,12 +62,6 @@ def _get_active_plan(company: Company) -> StaffingPlan | None:
 def _get_people_from_active_plan(
     company: Company, plan: StaffingPlan
 ) -> tuple[list[dict], set[int]]:
-    """
-    Возвращает:
-      - rows: [{person, position, assignment, membership}]
-      - person_ids: set[int]
-    Берём только людей, которые реально назначены в активный staffing plan (active assignments).
-    """
     assignments = list(
         StaffingAssignment.objects.filter(
             company=company,
@@ -85,7 +85,6 @@ def _get_people_from_active_plan(
     for a in assignments:
         pid = a.person_id
         if pid in person_ids:
-            # по твоим правилам такого быть не должно, но не ломаем страницу
             continue
         person_ids.add(pid)
         person_to_position[pid] = a.staffing_plan_item.position
@@ -102,7 +101,6 @@ def _get_people_from_active_plan(
     }
 
     rows: list[dict] = []
-    # ВАЖНО: сохраняем порядок assignments (он уже position -> family -> first -> second)
     for a in assignments:
         pid = a.person_id
         p = person_to_person.get(pid)
@@ -121,11 +119,6 @@ def _get_people_from_active_plan(
 
 
 class StaffShiftMembershipView(LoginRequiredMixin, ActiveCompanyMixin, TemplateView):
-    """
-    Staff page (staff.html) — базовое распределение людей по сменам (A/B/C...).
-    ВАЖНО: показываем ТОЛЬКО людей, которые назначены в активный staffing plan (active assignments).
-    """
-
     template_name = "staff/staff.html"
 
     def post(self, request: HttpRequest, *args, **kwargs) -> HttpResponse:
@@ -152,7 +145,6 @@ class StaffShiftMembershipView(LoginRequiredMixin, ActiveCompanyMixin, TemplateV
             messages.error(request, "Invalid person.")
             return redirect("staff:staff_members")
 
-        # person должен быть в активном staffing plan (active assignments)
         in_plan = StaffingAssignment.objects.filter(
             company=company,
             is_active=True,
@@ -178,14 +170,12 @@ class StaffShiftMembershipView(LoginRequiredMixin, ActiveCompanyMixin, TemplateV
         now_dt = timezone.now()
 
         with transaction.atomic():
-            # закрываем текущую активную membership (если была)
             ShiftMembership.objects.filter(
                 company=company,
                 person_id=person_id,
                 is_active=True,
             ).update(is_active=False, released_at=now_dt)
 
-            # если shift выбран — создаём новую активную membership
             if shift is not None:
                 ShiftMembership.objects.create(
                     company=company,
@@ -222,11 +212,10 @@ class StaffShiftMembershipView(LoginRequiredMixin, ActiveCompanyMixin, TemplateV
             ctx["shifts"] = []
             return ctx
 
-        # shifts: алфавит по shift_number
         shifts = list(
             Shift.objects.filter(company=company, is_active=True)
             .select_related("shift_type")
-            .order_by("shift_number")
+            .order_by("shift_type__code_letter", "shift_no")
         )
         ctx["shifts"] = shifts
 
@@ -251,7 +240,6 @@ class StaffShiftMembershipView(LoginRequiredMixin, ActiveCompanyMixin, TemplateV
                 (p.second_name or "").lower(),
             )
 
-        # группируем по shifts (в порядке shifts)
         shift_groups = []
         for sh in shifts:
             group_rows = [
@@ -275,9 +263,6 @@ class StaffShiftMembershipView(LoginRequiredMixin, ActiveCompanyMixin, TemplateV
         return ctx
 
 
-# =========================
-# Helpers for date->datetime
-# =========================
 def _parse_date_from_post(value: str | None):
     if not value:
         return None
@@ -288,6 +273,9 @@ def _parse_date_from_post(value: str | None):
 
 
 def _combine_date_with_now_time(chosen_date, now_dt):
+    if chosen_date is None:
+        chosen_date = now_dt.date()
+
     dt = datetime(
         year=chosen_date.year,
         month=chosen_date.month,
@@ -302,9 +290,6 @@ def _combine_date_with_now_time(chosen_date, now_dt):
     return dt
 
 
-# =========================
-# Roster (basic monthly view)
-# =========================
 def _get_month_start_end(month_str: str | None) -> tuple[date, date]:
     today = timezone.localdate()
     if month_str:
@@ -333,31 +318,14 @@ def _is_absent(
 def _active_shift_for_day(
     shift_type: ShiftType, shifts_ordered: list[Shift], day: date
 ) -> Shift | None:
-    if not shift_type.anchor_date:
-        return None
     if not shifts_ordered:
         return None
 
-    on = int(shift_type.shift_days_on)
-    off = int(shift_type.shift_days_off)
-    cycle = on + off
+    for sh in shifts_ordered:
+        if sh.is_on_duty(day):
+            return sh
 
-    if on <= 0:
-        return None
-
-    groups = cycle // on if cycle % on == 0 else 1
-    if groups <= 0:
-        groups = 1
-
-    delta = (day - shift_type.anchor_date).days
-    if delta < 0:
-        block_index = -((abs(delta) + on - 1) // on)
-    else:
-        block_index = delta // on
-
-    idx = block_index % groups
-    idx = idx % len(shifts_ordered)
-    return shifts_ordered[idx]
+    return None
 
 
 class StaffRosterView(LoginRequiredMixin, ActiveCompanyMixin, TemplateView):
@@ -394,7 +362,7 @@ class StaffRosterView(LoginRequiredMixin, ActiveCompanyMixin, TemplateView):
         items = list(
             StaffingPlanItem.objects.filter(staffing_plan=plan)
             .select_related("position", "shift_type")
-            .order_by("position__name_long", "shift_type__shift_type_short")
+            .order_by("position__name_long", "shift_type__code_letter")
         )
 
         active_assignments = list(
@@ -412,7 +380,7 @@ class StaffRosterView(LoginRequiredMixin, ActiveCompanyMixin, TemplateView):
         shift_type_ids = sorted({it.shift_type_id for it in items})
         shift_types = list(
             ShiftType.objects.filter(company=company, pk__in=shift_type_ids).order_by(
-                "shift_type_short"
+                "code_letter", "shift_type_short"
             )
         )
         st_by_id = {st.shift_type_id: st for st in shift_types}
@@ -423,7 +391,7 @@ class StaffRosterView(LoginRequiredMixin, ActiveCompanyMixin, TemplateView):
                 company=company, shift_type_id__in=shift_type_ids, is_active=True
             )
             .select_related("shift_type")
-            .order_by("shift_number")
+            .order_by("shift_type__code_letter", "shift_no")
         )
         for sh in shifts_qs:
             shifts_by_st.setdefault(sh.shift_type_id, []).append(sh)
@@ -464,9 +432,8 @@ class StaffRosterView(LoginRequiredMixin, ActiveCompanyMixin, TemplateView):
                 if not st:
                     continue
 
-                active_shift = _active_shift_for_day(
-                    st, shifts_by_st.get(st.shift_type_id, []), day
-                )
+                shifts_for_type = shifts_by_st.get(st.shift_type_id, [])
+                active_shift = _active_shift_for_day(st, shifts_for_type, day)
 
                 base_people = persons_by_item.get(it.staffing_plan_item_id, [])
 
@@ -476,6 +443,9 @@ class StaffRosterView(LoginRequiredMixin, ActiveCompanyMixin, TemplateView):
                     if active_shift is not None:
                         if sh is None or sh.shift_id != active_shift.shift_id:
                             continue
+                    else:
+                        continue
+
                     if _is_absent(absences_by_person, p.person_id, day):
                         continue
                     filtered.append(p)
@@ -488,7 +458,9 @@ class StaffRosterView(LoginRequiredMixin, ActiveCompanyMixin, TemplateView):
                         "item": it,
                         "shift": active_shift,
                         "people": final_people,
-                        "is_anchor_missing": st.anchor_date is None,
+                        "is_anchor_missing": not any(
+                            s.anchor_date is not None for s in shifts_for_type
+                        ),
                     }
                 )
 
@@ -499,9 +471,6 @@ class StaffRosterView(LoginRequiredMixin, ActiveCompanyMixin, TemplateView):
         return ctx
 
 
-# =========================
-# Positions
-# =========================
 class PositionListView(LoginRequiredMixin, ActiveCompanyMixin, ListView):
     model = Position
     template_name = "staff/positions_list.html"
@@ -584,9 +553,6 @@ class PositionDeactivateView(LoginRequiredMixin, ActiveCompanyMixin, View):
         return redirect("staff:positions_list")
 
 
-# =========================
-# Shift types
-# =========================
 class ShiftTypeListView(LoginRequiredMixin, ActiveCompanyMixin, ListView):
     model = ShiftType
     template_name = "staff/shift_types_list.html"
@@ -616,40 +582,95 @@ class ShiftTypeListView(LoginRequiredMixin, ActiveCompanyMixin, ListView):
         return ctx
 
 
+class ShiftTypePatternPreviewView(LoginRequiredMixin, ActiveCompanyMixin, View):
+    def post(self, request: HttpRequest, *args, **kwargs) -> HttpResponse:
+        company = self.get_active_company()
+
+        days_on = request.POST.get("shift_days_on")
+        days_off = request.POST.get("shift_days_off")
+        shift_type_id_raw = (request.POST.get("shift_type_id") or "").strip()
+
+        exclude_pk = None
+        if shift_type_id_raw.isdigit():
+            exclude_pk = int(shift_type_id_raw)
+
+        feedback = evaluate_shift_pattern(
+            company=company,
+            days_on=days_on,
+            days_off=days_off,
+            exclude_pk=exclude_pk,
+        )
+
+        form = ShiftTypeForm(
+            company=company,
+            is_create=exclude_pk is None,
+            preview_url=reverse("staff:shift_types_pattern_preview"),
+        )
+
+        return render(
+            request,
+            "staff/includes/shift_type_pattern_feedback.html",
+            {
+                "form": form,
+                "pattern_value": feedback["pattern"],
+                "preview_error": feedback["error"],
+                "duplicate_message": feedback["duplicate_message"],
+                "duplicate_kind": feedback["duplicate_kind"],
+            },
+        )
+
+
 class ShiftTypeCreateView(LoginRequiredMixin, ActiveCompanyMixin, CreateView):
     model = ShiftType
+    form_class = ShiftTypeForm
     template_name = "staff/shift_types_form.html"
-    fields = [
-        "shift_type_name",
-        "shift_type_short",
-        "shift_days_on",
-        "shift_days_off",
-        "anchor_date",
-        "is_active",
-    ]
     success_url = reverse_lazy("staff:shift_types_list")
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["company"] = self.get_active_company()
+        kwargs["is_create"] = True
+        kwargs["preview_url"] = reverse("staff:shift_types_pattern_preview")
+        return kwargs
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["active_company"] = self.get_active_company()
+        return ctx
 
     def form_valid(self, form):
         company = self.get_active_company()
         if company is None:
             messages.error(self.request, "Active company is not selected.")
             return redirect("staff:shift_types_list")
+
+        feedback = form.pattern_feedback
+        existing = feedback.get("existing_obj")
+        duplicate_kind = feedback.get("duplicate_kind")
+
+        if duplicate_kind == "inactive" and existing is not None:
+            if self.request.POST.get("activate_existing") == "1":
+                existing.is_active = True
+                existing.save(update_fields=["is_active"])
+                messages.success(
+                    self.request,
+                    f"Existing shift type activated: "
+                    f"{existing.code_letter} — {existing.shift_type_name}.",
+                )
+                return redirect("staff:shift_types_edit", pk=existing.pk)
+
+            return self.form_invalid(form)
+
         form.instance.company = company
+        response = super().form_valid(form)
         messages.success(self.request, "Shift type created.")
-        return super().form_valid(form)
+        return response
 
 
 class ShiftTypeUpdateView(LoginRequiredMixin, ActiveCompanyMixin, UpdateView):
     model = ShiftType
+    form_class = ShiftTypeForm
     template_name = "staff/shift_types_form.html"
-    fields = [
-        "shift_type_name",
-        "shift_type_short",
-        "shift_days_on",
-        "shift_days_off",
-        "anchor_date",
-        "is_active",
-    ]
     success_url = reverse_lazy("staff:shift_types_list")
 
     def get_queryset(self):
@@ -658,9 +679,43 @@ class ShiftTypeUpdateView(LoginRequiredMixin, ActiveCompanyMixin, UpdateView):
             return ShiftType.objects.none()
         return ShiftType.objects.filter(company=company)
 
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["company"] = self.get_active_company()
+        kwargs["is_create"] = False
+        kwargs["preview_url"] = reverse("staff:shift_types_pattern_preview")
+        return kwargs
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["active_company"] = self.get_active_company()
+        return ctx
+
     def form_valid(self, form):
+        response = super().form_valid(form)
         messages.success(self.request, "Shift type updated.")
-        return super().form_valid(form)
+        return response
+
+
+class ShiftTypeActivateView(LoginRequiredMixin, ActiveCompanyMixin, View):
+    def post(self, request: HttpRequest, pk: int) -> HttpResponse:
+        company = self.get_active_company()
+        if company is None:
+            messages.error(request, "Active company is not selected.")
+            return redirect("staff:shift_types_list")
+
+        obj = get_object_or_404(ShiftType, pk=pk, company=company)
+
+        if obj.is_active:
+            messages.info(request, "Shift type is already active.")
+        else:
+            obj.is_active = True
+            obj.save(update_fields=["is_active"])
+            messages.success(request, "Shift type activated.")
+
+        if request.GET.get("show") == "all":
+            return redirect(f"{reverse('staff:shift_types_list')}?show=all")
+        return redirect("staff:shift_types_list")
 
 
 class ShiftTypeDeactivateView(LoginRequiredMixin, ActiveCompanyMixin, View):
@@ -683,9 +738,6 @@ class ShiftTypeDeactivateView(LoginRequiredMixin, ActiveCompanyMixin, View):
         return redirect("staff:shift_types_list")
 
 
-# =========================
-# Shifts
-# =========================
 class ShiftListView(LoginRequiredMixin, ActiveCompanyMixin, ListView):
     model = Shift
     template_name = "staff/shifts_list.html"
@@ -699,7 +751,7 @@ class ShiftListView(LoginRequiredMixin, ActiveCompanyMixin, ListView):
         qs = Shift.objects.filter(company=company).select_related("shift_type")
         if self.request.GET.get("show") != "all":
             qs = qs.filter(is_active=True)
-        return qs.order_by("-created_at")
+        return qs.order_by("shift_type__code_letter", "shift_no")
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
@@ -712,22 +764,99 @@ class ShiftListView(LoginRequiredMixin, ActiveCompanyMixin, ListView):
         else:
             ctx["toggle_filter_url"] = f"{reverse('staff:shifts_list')}?show=all"
             ctx["toggle_filter_label"] = "Show all"
+        ctx["package_create_url"] = reverse("staff:shifts_package_add")
         return ctx
+
+
+class ShiftPackageCreateView(LoginRequiredMixin, ActiveCompanyMixin, View):
+    template_name = "staff/shifts_package_form.html"
+
+    def get(self, request: HttpRequest, *args, **kwargs) -> HttpResponse:
+        company = self.get_active_company()
+        if company is None:
+            messages.error(request, "Active company is not selected.")
+            return redirect("staff:shifts_list")
+
+        form = ShiftPackageCreateForm(company=company)
+        return render(
+            request,
+            self.template_name,
+            {
+                "form": form,
+                "active_company": company,
+            },
+        )
+
+    def post(self, request: HttpRequest, *args, **kwargs) -> HttpResponse:
+        company = self.get_active_company()
+        if company is None:
+            messages.error(request, "Active company is not selected.")
+            return redirect("staff:shifts_list")
+
+        form = ShiftPackageCreateForm(request.POST, company=company)
+        if not form.is_valid():
+            return render(
+                request,
+                self.template_name,
+                {
+                    "form": form,
+                    "active_company": company,
+                },
+            )
+
+        shifts_data = form.build_shifts_data()
+
+        try:
+            with transaction.atomic():
+                for row in shifts_data:
+                    Shift.objects.create(**row)
+        except (IntegrityError, ValidationError) as e:
+            if isinstance(e, ValidationError) and hasattr(e, "message_dict"):
+                for field, errors in e.message_dict.items():
+                    if field == "__all__":
+                        for err in errors:
+                            form.add_error(None, err)
+                    else:
+                        for err in errors:
+                            form.add_error(field, err)
+            else:
+                form.add_error(
+                    None,
+                    "Failed to create shift package due to duplicate or invalid data.",
+                )
+
+            return render(
+                request,
+                self.template_name,
+                {
+                    "form": form,
+                    "active_company": company,
+                },
+            )
+
+        shift_type = form.cleaned_data["shift_type"]
+        messages.success(
+            request,
+            f"Shift package created: {shift_type.code_letter}1..{shift_type.code_letter}{shift_type.package_size}.",
+        )
+        return redirect("staff:shifts_list")
 
 
 class ShiftCreateView(LoginRequiredMixin, ActiveCompanyMixin, CreateView):
     model = Shift
     template_name = "staff/shifts_form.html"
-    fields = ["shift_number", "shift_type", "is_active"]
+    fields = ["shift_type", "shift_no", "anchor_date", "is_active"]
     success_url = reverse_lazy("staff:shifts_list")
 
     def get_form(self, form_class=None):
         form = super().get_form(form_class)
         company = self.get_active_company()
-        if company is not None and "shift_type" in form.fields:
-            form.fields["shift_type"].queryset = ShiftType.objects.filter(
-                company=company
-            )
+        if company is not None:
+            form.instance.company = company
+            if "shift_type" in form.fields:
+                form.fields["shift_type"].queryset = ShiftType.objects.filter(
+                    company=company
+                )
         return form
 
     def form_valid(self, form):
@@ -735,15 +864,32 @@ class ShiftCreateView(LoginRequiredMixin, ActiveCompanyMixin, CreateView):
         if company is None:
             messages.error(self.request, "Active company is not selected.")
             return redirect("staff:shifts_list")
+
         form.instance.company = company
+
+        try:
+            response = super().form_valid(form)
+        except ValidationError as e:
+            if hasattr(e, "message_dict"):
+                for field, errors in e.message_dict.items():
+                    if field == "__all__":
+                        for err in errors:
+                            form.add_error(None, err)
+                    else:
+                        for err in errors:
+                            form.add_error(field, err)
+            else:
+                form.add_error(None, str(e))
+            return self.render_to_response(self.get_context_data(form=form))
+
         messages.success(self.request, "Shift created.")
-        return super().form_valid(form)
+        return response
 
 
 class ShiftUpdateView(LoginRequiredMixin, ActiveCompanyMixin, UpdateView):
     model = Shift
     template_name = "staff/shifts_form.html"
-    fields = ["shift_number", "shift_type", "is_active"]
+    fields = ["shift_type", "shift_no", "anchor_date", "is_active"]
     success_url = reverse_lazy("staff:shifts_list")
 
     def get_queryset(self):
@@ -762,8 +908,23 @@ class ShiftUpdateView(LoginRequiredMixin, ActiveCompanyMixin, UpdateView):
         return form
 
     def form_valid(self, form):
+        try:
+            response = super().form_valid(form)
+        except ValidationError as e:
+            if hasattr(e, "message_dict"):
+                for field, errors in e.message_dict.items():
+                    if field == "__all__":
+                        for err in errors:
+                            form.add_error(None, err)
+                    else:
+                        for err in errors:
+                            form.add_error(field, err)
+            else:
+                form.add_error(None, str(e))
+            return self.render_to_response(self.get_context_data(form=form))
+
         messages.success(self.request, "Shift updated.")
-        return super().form_valid(form)
+        return response
 
 
 class ShiftDeactivateView(LoginRequiredMixin, ActiveCompanyMixin, View):
@@ -786,9 +947,6 @@ class ShiftDeactivateView(LoginRequiredMixin, ActiveCompanyMixin, View):
         return redirect("staff:shifts_list")
 
 
-# =========================
-# Staffing Plans + Assignments (ниже — твоя текущая логика, без изменений)
-# =========================
 def _plan_has_active_assignments(plan: StaffingPlan) -> bool:
     return StaffingAssignment.objects.filter(
         is_active=True,
@@ -1047,7 +1205,7 @@ class AssignmentsView(LoginRequiredMixin, ActiveCompanyMixin, TemplateView):
                 occupied=Count("assignments", filter=Q(assignments__is_active=True))
             )
             .prefetch_related(Prefetch("assignments", queryset=active_assignments_qs))
-            .order_by("position__name_long", "shift_type__shift_type_short")
+            .order_by("position__name_long", "shift_type__code_letter")
         )
 
         items = []
@@ -1167,3 +1325,57 @@ class AssignmentReleaseAllView(LoginRequiredMixin, ActiveCompanyMixin, View):
             messages.info(request, "No active assignments to release.")
 
         return redirect("staff:assignments")
+
+
+class ShiftTypeListView(LoginRequiredMixin, ActiveCompanyMixin, ListView):
+    model = ShiftType
+    template_name = "staff/shift_types_list.html"
+    context_object_name = "shift_types"
+    paginate_by = 10
+
+    def get_queryset(self):
+        company = self.get_active_company()
+        print("DEBUG shift_types company =", company)
+        print(
+            "DEBUG session active_company_id =",
+            self.request.session.get("active_company_id"),
+        )
+
+        if company is None:
+            print("DEBUG shift_types queryset = NONE")
+            return ShiftType.objects.none()
+
+        all_qs = ShiftType.objects.filter(company=company).order_by("-created_at")
+        print("DEBUG shift_types total for company =", all_qs.count())
+        print(
+            "DEBUG shift_types all =",
+            list(
+                all_qs.values_list(
+                    "shift_type_id",
+                    "code_letter",
+                    "shift_type_short",
+                    "is_active",
+                    "company_id",
+                )
+            ),
+        )
+
+        if self.request.GET.get("show") != "all":
+            qs = all_qs.filter(is_active=True)
+            print("DEBUG shift_types active only count =", qs.count())
+            print(
+                "DEBUG shift_types active only =",
+                list(
+                    qs.values_list(
+                        "shift_type_id",
+                        "code_letter",
+                        "shift_type_short",
+                        "is_active",
+                        "company_id",
+                    )
+                ),
+            )
+            return qs
+
+        print("DEBUG shift_types show all count =", all_qs.count())
+        return all_qs

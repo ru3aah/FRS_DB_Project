@@ -1,0 +1,28 @@
+<div id="pattern-preview-block">
+  <label class="form-label" for="{{ form.shift_type_short.id_for_label }}">
+    Pattern
+  </label>
+
+  <input type="text"
+         name="shift_type_short"
+         id="id_shift_type_short"
+         class="form-control"
+         value="{{ pattern_value|default:'' }}"
+         readonly>
+
+  <div class="form-text">
+    Filled automatically from days on / days off.
+  </div>
+
+  {% if preview_error %}
+    <div class="text-danger small mt-1">
+      {{ preview_error }}
+    </div>
+  {% endif %}
+
+  {% if duplicate_message %}
+    <div class="alert {% if duplicate_kind == 'active' %}alert-danger{% else %}alert-warning{% endif %} mt-2 mb-0 py-2">
+      {{ duplicate_message }}
+    </div>
+  {% endif %}
+</div>

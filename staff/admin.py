@@ -8,7 +8,6 @@ from .models import (
     StaffingPlanItem,
     StaffEmployment,
     StaffingAssignment,
-    # NEW
     ShiftMembership,
     StaffAbsence,
     RosterOverride,
@@ -38,17 +37,18 @@ class ShiftTypeAdmin(admin.ModelAdmin):
     list_display = (
         "shift_type_id",
         "company",
+        "code_letter",
         "shift_type_short",
         "shift_type_name",
         "shift_days_on",
         "shift_days_off",
-        "anchor_date",
+        "package_size",
         "is_active",
         "updated_at",
     )
     list_filter = ("company", "is_active")
-    search_fields = ("shift_type_short", "shift_type_name")
-    ordering = ("company", "shift_type_short")
+    search_fields = ("code_letter", "shift_type_short", "shift_type_name")
+    ordering = ("company", "code_letter", "shift_type_short")
     list_per_page = 50
     readonly_fields = ("created_at", "updated_at")
 
@@ -60,16 +60,19 @@ class ShiftAdmin(admin.ModelAdmin):
         "company",
         "shift_number",
         "shift_type",
+        "shift_no",
+        "anchor_date",
         "is_active",
         "updated_at",
     )
     list_filter = ("company", "is_active", "shift_type")
     search_fields = (
         "shift_number",
+        "shift_type__code_letter",
         "shift_type__shift_type_short",
         "shift_type__shift_type_name",
     )
-    ordering = ("company", "shift_number", "shift_type__shift_type_short")
+    ordering = ("company", "shift_type__code_letter", "shift_no")
     list_per_page = 50
     readonly_fields = ("created_at", "updated_at")
 
@@ -130,9 +133,6 @@ class StaffingAssignmentAdmin(admin.ModelAdmin):
     ordering = ("company", "-is_active", "-assigned_at")
 
 
-# =========================
-# NEW: Base shift distribution
-# =========================
 @admin.register(ShiftMembership)
 class ShiftMembershipAdmin(admin.ModelAdmin):
     list_display = (
@@ -150,9 +150,6 @@ class ShiftMembershipAdmin(admin.ModelAdmin):
     readonly_fields = ("assigned_at",)
 
 
-# =========================
-# NEW: Absences
-# =========================
 @admin.register(StaffAbsence)
 class StaffAbsenceAdmin(admin.ModelAdmin):
     list_display = (
@@ -176,9 +173,6 @@ class StaffAbsenceAdmin(admin.ModelAdmin):
     readonly_fields = ("created_at",)
 
 
-# =========================
-# NEW: Roster overrides
-# =========================
 @admin.register(RosterOverride)
 class RosterOverrideAdmin(admin.ModelAdmin):
     list_display = (
