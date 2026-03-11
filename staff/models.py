@@ -93,7 +93,7 @@ class ShiftType(models.Model):
 
     shift_type_name = models.CharField(
         max_length=255,
-        help_text="Long name for this shift type (e.g. Rotation 14/14, " "Night Shift)",
+        help_text="Long name for this shift type (e.g. Rotation 14/14, Night Shift)",
     )
 
     shift_type_short = models.CharField(
@@ -204,8 +204,8 @@ class Shift(models.Model):
     def __str__(self) -> str:
         st = self.shift_type
         return (
-            f"{self.shift_number} — {st.shift_type_short} ("
-            f"{st.shift_days_on}/{st.shift_days_off})"
+            f"{self.shift_number} — {st.shift_type_short} "
+            f"({st.shift_days_on}/{st.shift_days_off})"
         )
 
 
@@ -290,7 +290,10 @@ class StaffingPlanItem(models.Model):
         ]
 
     def __str__(self) -> str:
-        return f"{self.staffing_plan} | {self.position} x {self.position_qty} | {self.shift_type}"
+        return (
+            f"{self.staffing_plan} | {self.position} x {self.position_qty} | "
+            f"{self.shift_type}"
+        )
 
 
 # =========================
@@ -322,7 +325,7 @@ class StaffEmployment(models.Model):
 
     is_active = models.BooleanField(
         default=True,
-        help_text="Active employment (person is currently hired by this " "company).",
+        help_text="Active employment (person is currently hired by this company).",
     )
 
     created_at = models.DateTimeField(auto_now_add=True)
@@ -337,12 +340,17 @@ class StaffEmployment(models.Model):
                 condition=Q(is_active=True),
                 name="uq_staff_employment_company_person_active",
             ),
+            models.UniqueConstraint(
+                fields=["person"],
+                condition=Q(is_active=True),
+                name="uq_staff_employment_person_active",
+            ),
         ]
 
     def __str__(self) -> str:
         return (
-            f"{self.person} @ {self.company} ("
-            f"{'active' if self.is_active else 'inactive'})"
+            f"{self.person} @ {self.company} "
+            f"({'active' if self.is_active else 'inactive'})"
         )
 
 
@@ -389,8 +397,8 @@ class StaffingAssignment(models.Model):
 
     def __str__(self) -> str:
         return (
-            f"{self.person} -> {self.staffing_plan_item} ("
-            f"{'active' if self.is_active else 'inactive'})"
+            f"{self.person} -> {self.staffing_plan_item} "
+            f"({'active' if self.is_active else 'inactive'})"
         )
 
 
@@ -434,7 +442,6 @@ class ShiftMembership(models.Model):
         db_table = "staff_shift_memberships"
         ordering = ["-is_active", "-assigned_at"]
         constraints = [
-            # Only one active membership for (company, person)
             models.UniqueConstraint(
                 fields=["company", "person"],
                 condition=Q(is_active=True),
@@ -444,8 +451,8 @@ class ShiftMembership(models.Model):
 
     def __str__(self) -> str:
         return (
-            f"{self.person} -> {self.shift} ("
-            f"{'active' if self.is_active else 'inactive'})"
+            f"{self.person} -> {self.shift} "
+            f"({'active' if self.is_active else 'inactive'})"
         )
 
 

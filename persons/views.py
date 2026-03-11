@@ -97,10 +97,27 @@ class PersonListView(NavbarContextMixin, HRAccessMixin, ListView):
     context_object_name = "persons"
     paginate_by = 25
 
+    def get_queryset(self):
+        qs = Person.objects.select_related("company", "nationality").order_by(
+            "family_name",
+            "first_name",
+            "second_name",
+            "person_id",
+        )
+
+        show_mode = (self.request.GET.get("show") or "").strip().lower()
+        active_company_id = self.request.session.get("active_company_id")
+
+        if show_mode != "all" and active_company_id:
+            qs = qs.filter(company_id=active_company_id)
+
+        return qs
+
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         user = self.request.user
         ctx["can_manage_hr"] = user.is_superuser or user.has_perm("persons.hr_manager")
+        ctx["show_all"] = (self.request.GET.get("show") or "").strip().lower() == "all"
         return ctx
 
 
@@ -108,6 +125,9 @@ class PersonDetailView(NavbarContextMixin, HRAccessMixin, DetailView):
     model = Person
     template_name = "persons/detail.html"
     context_object_name = "person"
+
+    def get_queryset(self):
+        return Person.objects.select_related("company", "nationality")
 
 
 class PersonCreateView(NavbarContextMixin, HRAccessMixin, CreateView):
@@ -135,6 +155,10 @@ class PersonCreateView(NavbarContextMixin, HRAccessMixin, CreateView):
             ctx["show_dup_modal"] = True
             return self.render_to_response(ctx)
 
+        active_company_id = self.request.session.get("active_company_id")
+        if active_company_id:
+            form.instance.company_id = active_company_id
+
         response = super().form_valid(form)
         messages.success(self.request, "Person created and saved.")
         return response
@@ -157,6 +181,9 @@ class PersonUpdateView(NavbarContextMixin, HRAccessMixin, UpdateView):
 
     DOCS_PER_PAGE = 10
     DOCS_PAGE_PARAM = "docs_page"
+
+    def get_queryset(self):
+        return Person.objects.select_related("company", "nationality")
 
     def form_valid(self, form):
         cd = form.cleaned_data

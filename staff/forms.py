@@ -1,4 +1,3 @@
-# staff/forms.py
 from __future__ import annotations
 
 from datetime import date
@@ -137,7 +136,22 @@ class AssignmentCreateForm(forms.Form):
         if self.company is None or self.item is None or person is None:
             return cleaned
 
-        # NEW RULE: position.type vs person.residency_status
+        active_employment = (
+            StaffEmployment.objects.filter(person=person, is_active=True)
+            .select_related("company")
+            .first()
+        )
+        if (
+            active_employment is not None
+            and active_employment.company_id != self.company.id
+        ):
+            company_name = (
+                active_employment.company.name_short or active_employment.company.name
+            )
+            raise ValidationError(
+                f"This person is already actively employed by {company_name}."
+            )
+
         # Position.type: "local" / "expat" / "any"
         # Person.residency_status: "LOCAL" / "EXPAT"
         pos_type = (self.item.position.type or "").strip().lower()
@@ -150,13 +164,16 @@ class AssignmentCreateForm(forms.Form):
                 )
 
         occupied = StaffingAssignment.objects.filter(
-            staffing_plan_item=self.item, is_active=True
+            staffing_plan_item=self.item,
+            is_active=True,
         ).count()
         if occupied >= self.item.position_qty:
             raise ValidationError("No vacant slots for this position/shift type.")
 
         if StaffingAssignment.objects.filter(
-            staffing_plan_item=self.item, person=person, is_active=True
+            staffing_plan_item=self.item,
+            person=person,
+            is_active=True,
         ).exists():
             raise ValidationError("This person is already assigned to this slot.")
 
@@ -185,7 +202,11 @@ class AssignmentCreateForm(forms.Form):
         assignment, _ = StaffingAssignment.objects.update_or_create(
             staffing_plan_item=self.item,
             person=person,
-            defaults={"company": self.company, "is_active": True, "released_at": None},
+            defaults={
+                "company": self.company,
+                "is_active": True,
+                "released_at": None,
+            },
         )
         return assignment
 
@@ -207,10 +228,13 @@ class ShiftMembershipForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         if company is not None:
             self.fields["shift"].queryset = Shift.objects.filter(
-                company=company, is_active=True
+                company=company,
+                is_active=True,
             )
         self.fields["person"].queryset = Person.objects.all().order_by(
-            "family_name", "first_name", "second_name"
+            "family_name",
+            "first_name",
+            "second_name",
         )
 
 
@@ -235,7 +259,9 @@ class StaffAbsenceForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["person"].queryset = Person.objects.all().order_by(
-            "family_name", "first_name", "second_name"
+            "family_name",
+            "first_name",
+            "second_name",
         )
 
     def clean(self):
@@ -274,10 +300,14 @@ class RosterOverrideForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
 
         self.fields["replacement_person"].queryset = Person.objects.all().order_by(
-            "family_name", "first_name", "second_name"
+            "family_name",
+            "first_name",
+            "second_name",
         )
         self.fields["replaced_person"].queryset = Person.objects.all().order_by(
-            "family_name", "first_name", "second_name"
+            "family_name",
+            "first_name",
+            "second_name",
         )
 
         if company is not None:

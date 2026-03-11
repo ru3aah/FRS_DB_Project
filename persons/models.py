@@ -15,8 +15,10 @@ class Person(models.Model):
     # reference to company inputted the person
     company = models.ForeignKey(
         Company,
+        db_column="company_id",
+        db_index=True,
+        related_name="persons_by_company",
         on_delete=models.CASCADE,
-        related_name="persons",
         blank=True,
         null=True,
         help_text="Company that inputted the person data",
@@ -66,7 +68,9 @@ class Person(models.Model):
         ]
 
     def __str__(self) -> str:
-        return (f"{self.first_name} {self.second_name} " f"{self.family_name}").strip()
+        return (
+            f"{self.first_name} {self.second_name} " f"" f"{self.family_name}"
+        ).strip()
 
 
 class Country(models.Model):
