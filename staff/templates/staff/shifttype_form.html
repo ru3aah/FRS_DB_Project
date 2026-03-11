@@ -7,10 +7,13 @@
 
 <div class="container mt-4">
 
-  <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+  <div class="d-flex justify-content-between align-items-center flex-wrap
+  gap-2 mb-3">
     <div class="d-flex gap-2 flex-wrap">
-      <a class="btn btn-outline-secondary" href="{% url 'staff:shifts_add' %}">Back to add shift</a>
-      <a class="btn btn-outline-secondary" href="{% url 'staff:shifts_list' %}">Back to shifts</a>
+      <a class="btn btn-outline-secondary" href="
+{% url 'staff:shifts_add' %}">Back to add shift</a>
+      <a class="btn btn-outline-secondary" href="
+{% url 'staff:shifts_list' %}">Back to shifts</a>
     </div>
   </div>
 
@@ -41,7 +44,8 @@
         {% endfor %}
 
         <button type="submit" class="btn btn-primary">Save</button>
-        <a class="btn btn-outline-secondary" href="{% url 'staff:shifts_add' %}">Cancel</a>
+        <a class="btn btn-outline-secondary" href="
+{% url 'staff:shifts_add' %}">Cancel</a>
       </form>
     </div>
   </div>

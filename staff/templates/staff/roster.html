@@ -7,7 +7,8 @@
 <div class="container mt-4">
 
   <!-- Top navigation -->
-  <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+  <div class="d-flex justify-content-between align-items-center flex-wrap
+  gap-2 mb-3">
     <div class="d-flex gap-2 flex-wrap">
       <a class="btn btn-outline-secondary" href="{% url 'staff:index' %}">
         Staff menu
@@ -73,7 +74,8 @@
                   {% for entry in row.entries %}
                     <div class="mb-2 p-2 border rounded bg-light-subtle">
 
-                      <div class="d-flex justify-content-between align-items-center">
+                      <div class="d-flex justify-content-between
+                      align-items-center">
                         <div>
                           <strong>{{ entry.item.position.name_long }}</strong>
                           <span class="text-muted small">
@@ -96,7 +98,8 @@
                           <ul class="mb-0">
                             {% for p in entry.people %}
                               <li>
-                                {{ p.first_name }} {{ p.second_name }} {{ p.family_name }}
+                                {{ p.first_name }} {{ p.second_name }}
+                                  {{ p.family_name }}
                               </li>
                             {% endfor %}
                           </ul>

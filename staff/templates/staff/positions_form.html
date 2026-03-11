@@ -7,17 +7,21 @@
 
 <div class="container mt-4">
 
-  <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+  <div class="d-flex justify-content-between align-items-center flex-wrap
+  gap-2 mb-3">
     <div class="d-flex gap-2 flex-wrap">
-      <a class="btn btn-outline-secondary" href="{% url 'staff:positions_list' %}">Back to positions</a>
+      <a class="btn btn-outline-secondary" href="
+{% url 'staff:positions_list' %}">Back to positions</a>
     </div>
 
-    <a class="btn btn-success" href="{% url 'staff:positions_add' %}">Add new position</a>
+    <a class="btn btn-success" href="{% url 'staff:positions_add' %}">Add new
+        position</a>
   </div>
 
   <div class="card">
     <div class="card-header">
-      <strong>{% if object %}Edit position{% else %}Add new position{% endif %}</strong>
+      <strong>{% if object %}Edit position{% else %}Add new position
+      {% endif %}</strong>
     </div>
 
     <div class="card-body">
@@ -42,7 +46,8 @@
         {% endfor %}
 
         <button type="submit" class="btn btn-primary">Save</button>
-        <a class="btn btn-outline-secondary" href="{% url 'staff:positions_list' %}">Cancel</a>
+        <a class="btn btn-outline-secondary" href="
+{% url 'staff:positions_list' %}">Cancel</a>
       </form>
     </div>
   </div>

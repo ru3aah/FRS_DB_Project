@@ -7,10 +7,13 @@
 
 <div class="container mt-4">
 
-  <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+  <div class="d-flex justify-content-between align-items-center flex-wrap
+  gap-2 mb-3">
     <div class="d-flex gap-2 flex-wrap">
-      <a class="btn btn-success" href="{% url 'staff:staffing_plans_add' %}">Add new plan</a>
-      <a class="btn btn-outline-secondary" href="{% url 'staff:index' %}">Staff menu</a>
+      <a class="btn btn-success" href="
+{% url 'staff:staffing_plans_add' %}">Add new plan</a>
+      <a class="btn btn-outline-secondary" href="
+{% url 'staff:index' %}">Staff menu</a>
     </div>
 
     <a class="btn btn-outline-primary" href="{{ toggle_filter_url }}">
@@ -23,11 +26,13 @@
   {% else %}
 
     <div class="card">
-      <div class="card-header d-flex justify-content-between align-items-center">
+      <div class="card-header d-flex justify-content-between
+      align-items-center">
         <strong>Staffing Plans</strong>
         <span class="text-muted small">
           Company: {{ active_company.name }}
-          {% if show_all %}(showing: all){% else %}(showing: active only){% endif %}
+          {% if show_all %}(showing: all){% else %}(showing: active only)
+          {% endif %}
         </span>
       </div>
 
@@ -54,7 +59,8 @@
                     {% if plan.is_active %}
                       <form class="d-inline"
                             method="post"
-                            action="{% url 'staff:staffing_plans_delete' plan.pk %}{% if show_all %}?show=all{% endif %}">
+                            action="
+{% url 'staff:staffing_plans_delete' plan.pk %}{% if show_all %}?show=all{% endif %}">
                         {% csrf_token %}
                         <button type="submit"
                                 class="btn btn-sm btn-success plan-toggle-btn"
@@ -65,10 +71,13 @@
                     {% else %}
                       <form class="d-inline"
                             method="post"
-                            action="{% url 'staff:staffing_plans_activate' plan.pk %}{% if show_all %}?show=all{% endif %}">
+                            action="
+{% url 'staff:staffing_plans_activate' plan.pk %}{% if show_all %}?show=all
+{% endif %}">
                         {% csrf_token %}
                         <button type="submit"
-                                class="btn btn-sm btn-outline-secondary plan-toggle-btn"
+                                class="btn btn-sm btn-outline-secondary
+                                plan-toggle-btn"
                                 title="Click to activate">
                           No
                         </button>
@@ -90,7 +99,8 @@
                 </tr>
               {% empty %}
                 <tr>
-                  <td colspan="5" class="text-center p-4 text-muted">No staffing plans found.</td>
+                  <td colspan="5" class="text-center p-4 text-muted">No
+                      staffing plans found.</td>
                 </tr>
               {% endfor %}
             </tbody>
@@ -105,22 +115,28 @@
 
           {% if page_obj.has_previous %}
             <li class="page-item">
-              <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if show_all %}&show=all{% endif %}">Previous</a>
+              <a class="page-link" href="?page=
+{{ page_obj.previous_page_number }}{% if show_all %}&show=all
+{% endif %}">Previous</a>
             </li>
           {% else %}
-            <li class="page-item disabled"><span class="page-link">Previous</span></li>
+            <li class="page-item disabled"><span
+                    class="page-link">Previous</span></li>
           {% endif %}
 
           <li class="page-item disabled">
-            <span class="page-link">Page {{ page_obj.number }} of {{ paginator.num_pages }}</span>
+            <span class="page-link">Page {{ page_obj.number }} of
+                {{ paginator.num_pages }}</span>
           </li>
 
           {% if page_obj.has_next %}
             <li class="page-item">
-              <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if show_all %}&show=all{% endif %}">Next</a>
+              <a class="page-link" href="?page=
+{{ page_obj.next_page_number }}{% if show_all %}&show=all{% endif %}">Next</a>
             </li>
           {% else %}
-            <li class="page-item disabled"><span class="page-link">Next</span></li>
+            <li class="page-item disabled"><span
+                    class="page-link">Next</span></li>
           {% endif %}
 
         </ul>

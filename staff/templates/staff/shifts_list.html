@@ -7,10 +7,13 @@
 
 <div class="container mt-4">
 
-  <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+  <div class="d-flex justify-content-between align-items-center flex-wrap
+  gap-2 mb-3">
     <div class="d-flex gap-2 flex-wrap">
-      <a class="btn btn-success" href="{% url 'staff:shifts_add' %}">Add new shift</a>
-      <a class="btn btn-outline-secondary" href="{% url 'staff:index' %}">Staff menu</a>
+      <a class="btn btn-success" href="{% url 'staff:shifts_add' %}">Add new
+          shift</a>
+      <a class="btn btn-outline-secondary" href="
+{% url 'staff:index' %}">Staff menu</a>
     </div>
 
     <a class="btn btn-outline-primary" href="{{ toggle_filter_url }}">
@@ -37,7 +40,8 @@
         <strong>Shifts</strong>
         <span class="text-muted small">
           Company: {{ active_company.name }}
-          {% if show_all %}(showing: all){% else %}(showing: active only){% endif %}
+          {% if show_all %}(showing: all){% else %}(showing: active only)
+          {% endif %}
         </span>
       </div>
 
@@ -57,21 +61,26 @@
               {% for s in shifts %}
                 <tr>
                   <td class="text-nowrap">
-                    <a class="btn btn-sm btn-outline-primary" href="{% url 'staff:shifts_edit' s.pk %}">Edit</a>
+                    <a class="btn btn-sm btn-outline-primary" href="
+{% url 'staff:shifts_edit' s.pk %}">Edit</a>
 
                     <form class="d-inline"
                           method="post"
-                          action="{% url 'staff:shifts_delete' s.pk %}{% if show_all %}?show=all{% endif %}"
-                          onsubmit="return confirm('Deactivate this shift (soft delete)?');">
+                          action="{% url 'staff:shifts_delete' s.pk %}
+{% if show_all %}?show=all{% endif %}"
+                          onsubmit="return confirm('Deactivate this shift ' +
+                           '(soft delete)?');">
                       {% csrf_token %}
-                      <button type="submit" class="btn btn-sm btn-outline-danger">Del</button>
+                      <button type="submit" class="btn btn-sm
+                      btn-outline-danger">Del</button>
                     </form>
                   </td>
 
                   <td>{{ s.shift_number }}</td>
                   <td>
                     {% if s.shift_type %}
-                      {{ s.shift_type.shift_type_short }} — {{ s.shift_type.shift_type_name }}
+                      {{ s.shift_type.shift_type_short }} —
+                        {{ s.shift_type.shift_type_name }}
                     {% else %}
                       <span class="text-muted">—</span>
                     {% endif %}
@@ -106,10 +115,13 @@
 
           {% if page_obj.has_previous %}
             <li class="page-item">
-              <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if show_all %}&show=all{% endif %}">Previous</a>
+              <a class="page-link" href="?page=
+{{ page_obj.previous_page_number }}{% if show_all %}&show=all
+{% endif %}">Previous</a>
             </li>
           {% else %}
-            <li class="page-item disabled"><span class="page-link">Previous</span></li>
+            <li class="page-item disabled"><span
+                    class="page-link">Previous</span></li>
           {% endif %}
 
           <li class="page-item disabled">
@@ -120,10 +132,12 @@
 
           {% if page_obj.has_next %}
             <li class="page-item">
-              <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if show_all %}&show=all{% endif %}">Next</a>
+              <a class="page-link" href="?page=
+{{ page_obj.next_page_number }}{% if show_all %}&show=all{% endif %}">Next</a>
             </li>
           {% else %}
-            <li class="page-item disabled"><span class="page-link">Next</span></li>
+            <li class="page-item disabled"><span
+                    class="page-link">Next</span></li>
           {% endif %}
 
         </ul>

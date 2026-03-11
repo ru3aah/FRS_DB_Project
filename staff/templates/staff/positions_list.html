@@ -9,10 +9,13 @@
 
 
 
-  <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+  <div class="d-flex justify-content-between align-items-center flex-wrap
+  gap-2 mb-3">
     <div class="d-flex gap-2 flex-wrap">
-      <a class="btn btn-success" href="{% url 'staff:positions_add' %}">Add new position</a>
-      <a class="btn btn-outline-secondary" href="{% url 'staff:index' %}">Staff menu</a>
+      <a class="btn btn-success" href="{% url 'staff:positions_add' %}">Add
+          new position</a>
+      <a class="btn btn-outline-secondary" href="
+{% url 'staff:index' %}">Staff menu</a>
     </div>
 
     <a class="btn btn-outline-primary" href="{{ toggle_filter_url }}">
@@ -39,7 +42,8 @@
         <strong>Positions</strong>
         <span class="text-muted small">
           Company: {{ active_company.name }}
-          {% if show_all %}(showing: all){% else %}(showing: active only){% endif %}
+          {% if show_all %}(showing: all){% else %}(showing: active only)
+          {% endif %}
         </span>
       </div>
 
@@ -60,17 +64,22 @@
               {% for p in positions %}
                 <tr>
                   <td class="text-nowrap">
-                    <a class="btn btn-sm btn-outline-primary" href="{% url 'staff:positions_edit' p.pk %}">Edit</a>
+                    <a class="btn btn-sm btn-outline-primary" href="
+{% url 'staff:positions_edit' p.pk %}">Edit</a>
 
                     <form class="d-inline"
                           method="post"
-                          action="{% url 'staff:positions_delete' p.pk %}{% if show_all %}?show=all{% endif %}"
-                          onsubmit="return confirm('Deactivate this position (soft delete)?');">
+                          action="{% url 'staff:positions_delete' p.pk %}
+{% if show_all %}?show=all{% endif %}"
+                          onsubmit="return confirm('Deactivate this position ' +
+                           '(soft delete)?');">
                       {% csrf_token %}
-                      <button type="submit" class="btn btn-sm btn-outline-danger">Del</button>
+                      <button type="submit" class="btn btn-sm
+                      btn-outline-danger">Del</button>
                     </form>
 
-                    <a class="btn btn-sm btn-outline-secondary" href="{% url 'staff:positions_jd' p.pk %}">JD</a>
+                    <a class="btn btn-sm btn-outline-secondary" href="
+{% url 'staff:positions_jd' p.pk %}">JD</a>
                   </td>
 
                   <td>{{ p.name_long }}</td>
@@ -104,10 +113,13 @@
 
           {% if page_obj.has_previous %}
             <li class="page-item">
-              <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if show_all %}&show=all{% endif %}">Previous</a>
+              <a class="page-link" href="?page=
+{{ page_obj.previous_page_number }}{% if show_all %}&show=all
+{% endif %}">Previous</a>
             </li>
           {% else %}
-            <li class="page-item disabled"><span class="page-link">Previous</span></li>
+            <li class="page-item disabled"><span
+                    class="page-link">Previous</span></li>
           {% endif %}
 
           <li class="page-item disabled">
@@ -118,10 +130,12 @@
 
           {% if page_obj.has_next %}
             <li class="page-item">
-              <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if show_all %}&show=all{% endif %}">Next</a>
+              <a class="page-link" href="?page=
+{{ page_obj.next_page_number }}{% if show_all %}&show=all{% endif %}">Next</a>
             </li>
           {% else %}
-            <li class="page-item disabled"><span class="page-link">Next</span></li>
+            <li class="page-item disabled"><span
+                    class="page-link">Next</span></li>
           {% endif %}
 
         </ul>
