@@ -1,9 +1,10 @@
-from django.urls import path
+from django.urls import path, reverse_lazy
 from django.views.generic import RedirectView
 
 from .views import (
     AssignmentsView,
     AssignmentCreateView,
+    AssignmentPersonOptionsView,
     AssignmentReleaseAllView,
     AssignmentReleaseView,
     PositionCreateView,
@@ -51,7 +52,7 @@ urlpatterns = [
     ),
     path(
         "positions/<int:pk>/jd/",
-        RedirectView.as_view(pattern_name="under_construction"),
+        RedirectView.as_view(url=reverse_lazy("under_construction")),
         name="positions_jd",
     ),
     path("shift-types/", ShiftTypeListView.as_view(), name="shift_types_list"),
@@ -111,6 +112,11 @@ urlpatterns = [
         name="staffing_plans_delete",
     ),
     path("assignments/", AssignmentsView.as_view(), name="assignments"),
+    path(
+        "assignments/item/<int:item_pk>/person-options/",
+        AssignmentPersonOptionsView.as_view(),
+        name="assignment_person_options",
+    ),
     path(
         "assignments/item/<int:item_pk>/assign/",
         AssignmentCreateView.as_view(),

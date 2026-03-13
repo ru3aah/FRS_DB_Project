@@ -59,6 +59,14 @@ def _get_active_plan(company: Company) -> StaffingPlan | None:
     )
 
 
+def _dt_to_local_date(dt) -> date | None:
+    if not dt:
+        return None
+    if timezone.is_aware(dt):
+        return timezone.localtime(dt).date()
+    return dt.date()
+
+
 def _get_people_from_active_plan(
     company: Company, plan: StaffingPlan
 ) -> tuple[list[dict], set[int]]:
@@ -315,19 +323,6 @@ def _is_absent(
     return False
 
 
-def _active_shift_for_day(
-    shift_type: ShiftType, shifts_ordered: list[Shift], day: date
-) -> Shift | None:
-    if not shifts_ordered:
-        return None
-
-    for sh in shifts_ordered:
-        if sh.is_on_duty(day):
-            return sh
-
-    return None
-
-
 class StaffRosterView(LoginRequiredMixin, ActiveCompanyMixin, TemplateView):
     template_name = "staff/roster.html"
 
@@ -361,8 +356,8 @@ class StaffRosterView(LoginRequiredMixin, ActiveCompanyMixin, TemplateView):
 
         items = list(
             StaffingPlanItem.objects.filter(staffing_plan=plan)
-            .select_related("position", "shift_type")
-            .order_by("position__name_long", "shift_type__code_letter")
+            .select_related("position")
+            .order_by("position__name_long")
         )
 
         active_assignments = list(
@@ -377,27 +372,9 @@ class StaffRosterView(LoginRequiredMixin, ActiveCompanyMixin, TemplateView):
         for a in active_assignments:
             persons_by_item.setdefault(a.staffing_plan_item_id, []).append(a.person)
 
-        shift_type_ids = sorted({it.shift_type_id for it in items})
-        shift_types = list(
-            ShiftType.objects.filter(company=company, pk__in=shift_type_ids).order_by(
-                "code_letter", "shift_type_short"
-            )
-        )
-        st_by_id = {st.shift_type_id: st for st in shift_types}
-
-        shifts_by_st: dict[int, list[Shift]] = {}
-        shifts_qs = (
-            Shift.objects.filter(
-                company=company, shift_type_id__in=shift_type_ids, is_active=True
-            )
-            .select_related("shift_type")
-            .order_by("shift_type__code_letter", "shift_no")
-        )
-        for sh in shifts_qs:
-            shifts_by_st.setdefault(sh.shift_type_id, []).append(sh)
-
         mem_qs = ShiftMembership.objects.filter(
-            company=company, is_active=True
+            company=company,
+            is_active=True,
         ).select_related("shift", "person", "shift__shift_type")
         person_shift: dict[int, Shift] = {m.person_id: m.shift for m in mem_qs}
 
@@ -428,46 +405,52 @@ class StaffRosterView(LoginRequiredMixin, ActiveCompanyMixin, TemplateView):
         for day in days:
             day_entries = []
             for it in items:
-                st = st_by_id.get(it.shift_type_id)
-                if not st:
-                    continue
-
-                shifts_for_type = shifts_by_st.get(st.shift_type_id, [])
-                active_shift = _active_shift_for_day(st, shifts_for_type, day)
-
                 base_people = persons_by_item.get(it.staffing_plan_item_id, [])
 
-                filtered = []
+                filtered: list[dict] = []
+                anchor_missing = False
+
                 for p in base_people:
                     sh = person_shift.get(p.person_id)
-                    if active_shift is not None:
-                        if sh is None or sh.shift_id != active_shift.shift_id:
-                            continue
-                    else:
+                    if sh is None:
+                        continue
+
+                    if sh.anchor_date is None:
+                        anchor_missing = True
+                        continue
+
+                    if not sh.is_on_duty(day):
                         continue
 
                     if _is_absent(absences_by_person, p.person_id, day):
                         continue
-                    filtered.append(p)
+
+                    filtered.append({"person": p, "shift": sh})
 
                 ov_people = overrides.get((day, it.staffing_plan_item_id), [])
-                final_people = ov_people if ov_people else filtered
+                if ov_people:
+                    final_people = []
+                    for p in ov_people:
+                        final_people.append(
+                            {
+                                "person": p,
+                                "shift": person_shift.get(p.person_id),
+                            }
+                        )
+                else:
+                    final_people = filtered
 
                 day_entries.append(
                     {
                         "item": it,
-                        "shift": active_shift,
                         "people": final_people,
-                        "is_anchor_missing": not any(
-                            s.anchor_date is not None for s in shifts_for_type
-                        ),
+                        "is_anchor_missing": anchor_missing,
                     }
                 )
 
             rows.append({"day": day, "entries": day_entries})
 
         ctx["rows"] = rows
-        ctx["shift_types"] = shift_types
         return ctx
 
 
@@ -1007,10 +990,6 @@ class StaffingPlanBaseMixin(ActiveCompanyMixin):
                     f.fields["position"].queryset = Position.objects.filter(
                         company=company, is_active=True
                     )
-                if "shift_type" in f.fields:
-                    f.fields["shift_type"].queryset = ShiftType.objects.filter(
-                        company=company, is_active=True
-                    )
         return formset
 
     def get_context_data(self, **kwargs):
@@ -1200,25 +1179,67 @@ class AssignmentsView(LoginRequiredMixin, ActiveCompanyMixin, TemplateView):
 
         items_qs = (
             StaffingPlanItem.objects.filter(staffing_plan=plan)
-            .select_related("position", "shift_type")
+            .select_related("position")
             .annotate(
                 occupied=Count("assignments", filter=Q(assignments__is_active=True))
             )
             .prefetch_related(Prefetch("assignments", queryset=active_assignments_qs))
-            .order_by("position__name_long", "shift_type__code_letter")
+            .order_by("position__name_long")
         )
 
         items = []
+        today_str = date.today().isoformat()
         for it in items_qs:
             it.vacant = max(0, int(it.position_qty) - int(it.occupied or 0))
             items.append(it)
 
         ctx["items"] = items
         ctx["rows"] = [
-            {"item": it, "form": AssignmentCreateForm(company=company, item=it)}
+            {
+                "item": it,
+                "form": AssignmentCreateForm(
+                    company=company,
+                    item=it,
+                    initial={"assigned_on": today_str},
+                ),
+            }
             for it in items
         ]
         return ctx
+
+
+class AssignmentPersonOptionsView(LoginRequiredMixin, ActiveCompanyMixin, View):
+    def post(self, request: HttpRequest, item_pk: int) -> HttpResponse:
+        company = self.get_active_company()
+        if company is None:
+            return HttpResponse("")
+
+        item = get_object_or_404(
+            StaffingPlanItem.objects.select_related("staffing_plan"),
+            pk=item_pk,
+            staffing_plan__company=company,
+        )
+
+        assigned_on = (
+            request.POST.get("assigned_on")
+            or request.POST.get(f"assigned_on_{item_pk}")
+            or date.today().isoformat()
+        )
+
+        form = AssignmentCreateForm(
+            company=company,
+            item=item,
+            initial={"assigned_on": assigned_on},
+        )
+
+        return render(
+            request,
+            "staff/includes/assignment_person_select.html",
+            {
+                "form": form,
+                "item": item,
+            },
+        )
 
 
 class AssignmentCreateView(LoginRequiredMixin, ActiveCompanyMixin, View):
@@ -1256,7 +1277,7 @@ class AssignmentCreateView(LoginRequiredMixin, ActiveCompanyMixin, View):
                     update_fields=["assigned_at", "released_at", "is_active"]
                 )
         except IntegrityError:
-            messages.error(request, "This person is already assigned to this slot.")
+            messages.error(request, "Failed to create assignment.")
             return redirect("staff:assignments")
 
         messages.success(request, "Assigned.")
@@ -1277,6 +1298,16 @@ class AssignmentReleaseView(LoginRequiredMixin, ActiveCompanyMixin, View):
         released_at_dt = (
             _combine_date_with_now_time(released_on, now_dt) if released_on else now_dt
         )
+
+        assigned_date = _dt_to_local_date(a.assigned_at)
+        release_date = _dt_to_local_date(released_at_dt)
+
+        if assigned_date and release_date and release_date < assigned_date:
+            messages.error(
+                request,
+                "Release date cannot be earlier than assignment date.",
+            )
+            return redirect("staff:assignments")
 
         if a.is_active:
             a.is_active = False
@@ -1311,12 +1342,23 @@ class AssignmentReleaseAllView(LoginRequiredMixin, ActiveCompanyMixin, View):
             _combine_date_with_now_time(released_on, now_dt) if released_on else now_dt
         )
 
-        with transaction.atomic():
-            qs = StaffingAssignment.objects.filter(
-                company=company,
-                is_active=True,
-                staffing_plan_item__staffing_plan=plan,
+        qs = StaffingAssignment.objects.filter(
+            company=company,
+            is_active=True,
+            staffing_plan_item__staffing_plan=plan,
+        )
+
+        if (
+            released_on is not None
+            and qs.filter(assigned_at__date__gt=released_on).exists()
+        ):
+            messages.error(
+                request,
+                "Release date cannot be earlier than assignment date for one or more assignments.",
             )
+            return redirect("staff:assignments")
+
+        with transaction.atomic():
             updated = qs.update(is_active=False, released_at=released_at_dt)
 
         if updated:
@@ -1325,57 +1367,3 @@ class AssignmentReleaseAllView(LoginRequiredMixin, ActiveCompanyMixin, View):
             messages.info(request, "No active assignments to release.")
 
         return redirect("staff:assignments")
-
-
-class ShiftTypeListView(LoginRequiredMixin, ActiveCompanyMixin, ListView):
-    model = ShiftType
-    template_name = "staff/shift_types_list.html"
-    context_object_name = "shift_types"
-    paginate_by = 10
-
-    def get_queryset(self):
-        company = self.get_active_company()
-        print("DEBUG shift_types company =", company)
-        print(
-            "DEBUG session active_company_id =",
-            self.request.session.get("active_company_id"),
-        )
-
-        if company is None:
-            print("DEBUG shift_types queryset = NONE")
-            return ShiftType.objects.none()
-
-        all_qs = ShiftType.objects.filter(company=company).order_by("-created_at")
-        print("DEBUG shift_types total for company =", all_qs.count())
-        print(
-            "DEBUG shift_types all =",
-            list(
-                all_qs.values_list(
-                    "shift_type_id",
-                    "code_letter",
-                    "shift_type_short",
-                    "is_active",
-                    "company_id",
-                )
-            ),
-        )
-
-        if self.request.GET.get("show") != "all":
-            qs = all_qs.filter(is_active=True)
-            print("DEBUG shift_types active only count =", qs.count())
-            print(
-                "DEBUG shift_types active only =",
-                list(
-                    qs.values_list(
-                        "shift_type_id",
-                        "code_letter",
-                        "shift_type_short",
-                        "is_active",
-                        "company_id",
-                    )
-                ),
-            )
-            return qs
-
-        print("DEBUG shift_types show all count =", all_qs.count())
-        return all_qs

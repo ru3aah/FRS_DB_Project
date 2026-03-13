@@ -4,6 +4,7 @@ from datetime import date, timedelta
 
 from django import forms
 from django.core.exceptions import ValidationError
+from django.db.models import Q
 from django.forms import inlineformset_factory
 
 from persons.models import Person
@@ -14,7 +15,6 @@ from .models import (
     Shift,
     StaffingPlan,
     StaffingPlanItem,
-    StaffEmployment,
     StaffingAssignment,
     ShiftMembership,
     StaffAbsence,
@@ -23,10 +23,6 @@ from .models import (
 
 
 def _next_free_code_letter(existing_codes: list[str]) -> str:
-    """
-    Returns next free code in sequence:
-    A..Z, AA..AZ, BA..BZ, ...
-    """
     existing = {str(code or "").strip().upper() for code in existing_codes if code}
 
     def index_to_code(index: int) -> str:
@@ -55,15 +51,11 @@ def evaluate_shift_pattern(
     days_off,
     exclude_pk: int | None = None,
 ) -> dict:
-    """
-    Central server-side evaluation for HTMX preview and form validation.
-    Checks duplicates among BOTH active and inactive records.
-    """
     result = {
         "pattern": "",
         "error": "",
         "duplicate_message": "",
-        "duplicate_kind": "",  # "", "active", "inactive"
+        "duplicate_kind": "",
         "existing_obj": None,
     }
 
@@ -122,6 +114,21 @@ def evaluate_shift_pattern(
             )
 
     return result
+
+
+def _assignment_conflict_q(target_date: date) -> Q:
+    return Q(assigned_at__date__lte=target_date) & (
+        Q(released_at__isnull=True) | Q(released_at__date__gte=target_date)
+    )
+
+
+class PersonAssignmentChoiceField(forms.ModelChoiceField):
+    def label_from_instance(self, obj: Person) -> str:
+        full_name = " ".join(
+            part for part in [obj.first_name, obj.second_name, obj.family_name] if part
+        ).strip()
+        residency = (obj.residency_status or "").strip()
+        return f"{obj.person_id} | {full_name} | {residency}"
 
 
 class PositionForm(forms.ModelForm):
@@ -232,13 +239,9 @@ class ShiftTypeForm(forms.ModelForm):
         if feedback["error"]:
             self.add_error("shift_days_off", feedback["error"])
 
-        # Active duplicate -> always block
         if feedback["duplicate_kind"] == "active":
             self.add_error(None, feedback["duplicate_message"])
 
-        # Inactive duplicate:
-        # on CREATE do not block here; view will offer activation
-        # on UPDATE block
         if feedback["duplicate_kind"] == "inactive" and not self.is_create:
             self.add_error(None, feedback["duplicate_message"])
 
@@ -352,13 +355,12 @@ class StaffingPlanForm(forms.ModelForm):
 class StaffingPlanItemForm(forms.ModelForm):
     class Meta:
         model = StaffingPlanItem
-        fields = ["position", "position_qty", "shift_type"]
+        fields = ["position", "position_qty"]
         widgets = {
             "position": forms.Select(attrs={"class": "form-select"}),
             "position_qty": forms.NumberInput(
                 attrs={"class": "form-control", "min": 1}
             ),
-            "shift_type": forms.Select(attrs={"class": "form-select"}),
         }
 
 
@@ -372,7 +374,7 @@ StaffingPlanItemFormSet = inlineformset_factory(
 
 
 class AssignmentCreateForm(forms.Form):
-    person = forms.ModelChoiceField(
+    person = PersonAssignmentChoiceField(
         queryset=Person.objects.none(),
         widget=forms.Select(attrs={"class": "form-select"}),
         empty_label="Select person…",
@@ -392,31 +394,49 @@ class AssignmentCreateForm(forms.Form):
         super().__init__(*args, **kwargs)
         self.company = company
         self.item = item
-        self.fields["person"].queryset = Person.objects.all().order_by(
-            "first_name", "family_name"
-        )
+
+        assigned_on = None
+        raw_assigned_on = None
+
+        if self.is_bound:
+            raw_assigned_on = self.data.get(
+                self.add_prefix("assigned_on")
+            ) or self.data.get("assigned_on")
+        else:
+            raw_assigned_on = self.initial.get("assigned_on")
+
+        if raw_assigned_on:
+            try:
+                assigned_on = date.fromisoformat(str(raw_assigned_on))
+            except (TypeError, ValueError):
+                assigned_on = None
+
+        if assigned_on is None:
+            assigned_on = date.today()
+
+        conflicting_person_ids = StaffingAssignment.objects.filter(
+            _assignment_conflict_q(assigned_on)
+        ).values_list("person_id", flat=True)
+
+        qs = Person.objects.all()
+        if self.company is not None:
+            qs = qs.filter(company=self.company)
+
+        self.fields["person"].queryset = qs.exclude(
+            person_id__in=conflicting_person_ids
+        ).order_by("person_id", "family_name", "first_name", "second_name")
 
     def clean(self):
         cleaned = super().clean()
         person: Person | None = cleaned.get("person")
+        assigned_on: date = cleaned.get("assigned_on") or date.today()
 
         if self.company is None or self.item is None or person is None:
             return cleaned
 
-        active_employment = (
-            StaffEmployment.objects.filter(person=person, is_active=True)
-            .select_related("company")
-            .first()
-        )
-        if (
-            active_employment is not None
-            and active_employment.company_id != self.company.id
-        ):
-            company_name = (
-                active_employment.company.name_short or active_employment.company.name
-            )
+        if person.company_id != self.company.id:
             raise ValidationError(
-                f"This person is already actively employed by {company_name}."
+                "You can assign only persons created under the active company."
             )
 
         pos_type = (self.item.position.type or "").strip().lower()
@@ -433,18 +453,15 @@ class AssignmentCreateForm(forms.Form):
             is_active=True,
         ).count()
         if occupied >= self.item.position_qty:
-            raise ValidationError("No vacant slots for this position/shift type.")
+            raise ValidationError("No vacant slots for this position.")
 
-        if StaffingAssignment.objects.filter(
-            staffing_plan_item=self.item,
-            person=person,
-            is_active=True,
-        ).exists():
-            raise ValidationError("This person is already assigned to this slot.")
-
-        if StaffingAssignment.objects.filter(person=person, is_active=True).exists():
+        if (
+            StaffingAssignment.objects.filter(person=person)
+            .filter(_assignment_conflict_q(assigned_on))
+            .exists()
+        ):
             raise ValidationError(
-                "This person already has an active assignment and cannot be assigned again."
+                "This person already has an assignment on the selected date."
             )
 
         return cleaned
@@ -455,25 +472,13 @@ class AssignmentCreateForm(forms.Form):
 
         person: Person = self.cleaned_data["person"]
 
-        emp, _created = StaffEmployment.objects.update_or_create(
-            company=self.company,
-            person=person,
-            defaults={"is_active": True, "terminated_on": None},
-        )
-        if emp.hired_on is None:
-            emp.hired_on = date.today()
-            emp.save(update_fields=["hired_on"])
-
-        assignment, _ = StaffingAssignment.objects.update_or_create(
+        return StaffingAssignment.objects.create(
             staffing_plan_item=self.item,
             person=person,
-            defaults={
-                "company": self.company,
-                "is_active": True,
-                "released_at": None,
-            },
+            company=self.company,
+            is_active=True,
+            released_at=None,
         )
-        return assignment
 
 
 class ShiftMembershipForm(forms.ModelForm):
@@ -561,5 +566,5 @@ class RosterOverrideForm(forms.ModelForm):
             self.fields["staffing_plan_item"].queryset = (
                 StaffingPlanItem.objects.filter(
                     staffing_plan__company=company
-                ).select_related("position", "shift_type", "staffing_plan")
+                ).select_related("position", "staffing_plan")
             )

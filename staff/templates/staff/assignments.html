@@ -4,6 +4,8 @@
 {% block content %}
 {% include "includes/navbar.html" %}
 
+<script src="https://unpkg.com/htmx.org@1.9.12"></script>
+
 <div class="container mt-4">
   <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
     <div class="d-flex gap-2 flex-wrap">
@@ -43,7 +45,6 @@
               <thead class="table-light text-center">
                 <tr>
                   <th style="width:30px;">Position</th>
-                  <th style="width:10px;">Shift</th>
                   <th style="width:10px;">Qty</th>
                   <th style="width:10px;">Hired</th>
                   <th style="width:10px;">Vacant</th>
@@ -59,10 +60,6 @@
 
                     <td class="fw-semibold text-center">
                       {{ item.position.name_long }}
-                    </td>
-
-                    <td class="text-center">
-                      {{ item.shift_type.shift_type_short }}
                     </td>
 
                     <td class="text-center">
@@ -125,12 +122,23 @@
                         {% csrf_token %}
 
                         <div class="row g-2 align-items-center">
-                          <div class="col-md-5">
-                            {{ form.person }}
+                          <div class="col-md-5"
+                               id="person-select-block-{{ item.pk }}">
+                            {% include "staff/includes/assignment_person_select.html" with form=form item=item only %}
                           </div>
 
                           <div class="col-md-4">
-                            {{ form.assigned_on }}
+                            <input
+                              type="date"
+                              name="assigned_on"
+                              value="{{ form.assigned_on.value|default:'' }}"
+                              class="form-control"
+                              hx-post="{% url 'staff:assignment_person_options' item.pk %}"
+                              hx-trigger="change"
+                              hx-target="#person-select-block-{{ item.pk }}"
+                              hx-swap="innerHTML"
+                              hx-include="closest form"
+                            >
                           </div>
 
                           <div class="col-md-3 d-grid">
@@ -148,7 +156,7 @@
                   {% endwith %}
                 {% empty %}
                   <tr>
-                    <td colspan="7" class="text-center py-4 text-muted">
+                    <td colspan="6" class="text-center py-4 text-muted">
                       No plan items.
                     </td>
                   </tr>

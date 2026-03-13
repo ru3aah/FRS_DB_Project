@@ -82,13 +82,6 @@ class ShiftType(models.Model):
       A = 7/14
       B = 28/28
       C = 2/2
-
-    Meaning:
-      shift_days_on  = consecutive work days
-      shift_days_off = consecutive off days
-
-    Valid only when off is divisible by on, so the cycle can be completed
-    by an integer number of sibling shifts.
     """
 
     shift_type_id = models.BigAutoField(primary_key=True)
@@ -194,12 +187,6 @@ class ShiftType(models.Model):
 
     @property
     def package_size(self) -> int:
-        """
-        Number of sibling shifts required to close one full cycle.
-        Example:
-          7/14 -> (7 + 14) / 7 = 3  => A1, A2, A3
-          28/28 -> (28 + 28) / 28 = 2 => B1, B2
-        """
         return self.cycle_days // int(self.shift_days_on)
 
     def __str__(self) -> str:
@@ -212,13 +199,6 @@ class ShiftType(models.Model):
 class Shift(models.Model):
     """
     Concrete shift inside one shift pattern package.
-
-    Examples:
-      ShiftType A = 7/14  -> A1, A2, A3
-      ShiftType B = 28/28 -> B1, B2
-
-    anchor_date means:
-      first day when THIS concrete shift starts its own duty block.
     """
 
     shift_id = models.BigAutoField(primary_key=True)
@@ -296,8 +276,7 @@ class Shift(models.Model):
                     }
                 )
 
-            expected_code = f"{self.shift_type.code_letter}{self.shift_no}"
-            self.shift_number = expected_code
+            self.shift_number = f"{self.shift_type.code_letter}{self.shift_no}"
 
     def save(self, *args, **kwargs):
         if self.shift_type_id and self.shift_no:
@@ -318,12 +297,6 @@ class Shift(models.Model):
         return int(self.shift_type.shift_days_off)
 
     def is_on_duty(self, day: date) -> bool:
-        """
-        Returns True when this concrete shift is on duty for the given date.
-
-        Formula:
-          (day - anchor_date) % cycle_days < days_on
-        """
         if not self.anchor_date:
             return False
 
@@ -379,7 +352,6 @@ class StaffingPlanItem(models.Model):
     Staffing plan line:
       - position
       - qty
-      - shift_type
     """
 
     staffing_plan_item_id = models.BigAutoField(primary_key=True)
@@ -398,97 +370,27 @@ class StaffingPlanItem(models.Model):
 
     position_qty = models.PositiveSmallIntegerField()
 
-    shift_type = models.ForeignKey(
-        ShiftType,
-        on_delete=models.PROTECT,
-        related_name="staffing_plan_items",
-    )
-
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         db_table = "staff_staffing_plan_items"
-        ordering = [
-            "position__name_long",
-            "shift_type__code_letter",
-            "shift_type__shift_type_short",
-        ]
+        ordering = ["position__name_long"]
         constraints = [
             models.UniqueConstraint(
-                fields=["staffing_plan", "position", "shift_type"],
-                name="uq_staffing_plan_item_plan_position_shifttype",
+                fields=["staffing_plan", "position"],
+                name="uq_staffing_plan_item_plan_position",
             ),
         ]
 
     def __str__(self) -> str:
-        return (
-            f"{self.staffing_plan} | {self.position} x {self.position_qty} | "
-            f"{self.shift_type}"
-        )
-
-
-# =========================
-# Employment / Assignments
-# =========================
-
-
-class StaffEmployment(models.Model):
-    """
-    Marks that a Person is hired by Company (employment history).
-    """
-
-    employment_id = models.BigAutoField(primary_key=True)
-
-    company = models.ForeignKey(
-        Company,
-        on_delete=models.CASCADE,
-        related_name="staff_employments",
-    )
-
-    person = models.ForeignKey(
-        Person,
-        on_delete=models.CASCADE,
-        related_name="employments",
-    )
-
-    hired_on = models.DateField(blank=True, null=True)
-    terminated_on = models.DateField(blank=True, null=True)
-
-    is_active = models.BooleanField(
-        default=True,
-        help_text="Active employment (person is currently hired by this company).",
-    )
-
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        db_table = "staff_employments"
-        ordering = ["-is_active", "company", "person"]
-        constraints = [
-            models.UniqueConstraint(
-                fields=["company", "person"],
-                condition=Q(is_active=True),
-                name="uq_staff_employment_company_person_active",
-            ),
-            models.UniqueConstraint(
-                fields=["person"],
-                condition=Q(is_active=True),
-                name="uq_staff_employment_person_active",
-            ),
-        ]
-
-    def __str__(self) -> str:
-        return (
-            f"{self.person} @ {self.company} "
-            f"({'active' if self.is_active else 'inactive'})"
-        )
+        return f"{self.staffing_plan} | {self.position} x {self.position_qty}"
 
 
 class StaffingAssignment(models.Model):
     """
-    Occupies a slot inside a StaffingPlanItem with a concrete Person.
+    Employment fact = assignment to a concrete staffing plan position.
+    If person has no active/overlapping assignment, person is not hired.
     """
 
     staffing_assignment_id = models.BigAutoField(primary_key=True)
@@ -509,7 +411,6 @@ class StaffingAssignment(models.Model):
         Company,
         on_delete=models.CASCADE,
         related_name="staffing_assignments",
-        help_text="Redundant but useful for filtering and consistency checks.",
     )
 
     is_active = models.BooleanField(default=True)
@@ -520,12 +421,33 @@ class StaffingAssignment(models.Model):
     class Meta:
         db_table = "staff_staffing_assignments"
         ordering = ["-is_active", "-assigned_at"]
-        constraints = [
-            models.UniqueConstraint(
-                fields=["staffing_plan_item", "person"],
-                name="uq_staffing_assignment_item_person",
-            ),
-        ]
+
+    def clean(self):
+        super().clean()
+
+        if (
+            self.staffing_plan_item_id
+            and self.company_id
+            and self.staffing_plan_item.staffing_plan.company_id != self.company_id
+        ):
+            raise ValidationError(
+                {"company": "Assignment company must match staffing plan company."}
+            )
+
+        if (
+            self.released_at
+            and self.assigned_at
+            and self.released_at < self.assigned_at
+        ):
+            raise ValidationError(
+                {
+                    "released_at": "Release datetime cannot be earlier than assigned datetime."
+                }
+            )
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
 
     def __str__(self) -> str:
         return (
@@ -534,19 +456,9 @@ class StaffingAssignment(models.Model):
         )
 
 
-# =========================
-# Base distribution by shifts
-# =========================
-
-
 class ShiftMembership(models.Model):
     """
     Base distribution: Person belongs to ONE concrete Shift inside Company.
-    Example:
-      Ivan -> A1
-      Petr -> A2
-      John -> A3
-    Used later to generate roster.
     """
 
     shift_membership_id = models.BigAutoField(primary_key=True)
@@ -628,9 +540,7 @@ class StaffAbsence(models.Model):
     date_to = models.DateField()
 
     note = models.CharField(max_length=255, blank=True, default="")
-
     is_active = models.BooleanField(default=True)
-
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -650,7 +560,6 @@ class StaffAbsence(models.Model):
 class RosterOverride(models.Model):
     """
     One-day replacement / override for roster.
-    Example: on 2026-03-10 person A replaced by person B for a plan item.
     """
 
     override_id = models.BigAutoField(primary_key=True)
@@ -687,7 +596,6 @@ class RosterOverride(models.Model):
 
     note = models.CharField(max_length=255, blank=True, default="")
     is_active = models.BooleanField(default=True)
-
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

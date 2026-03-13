@@ -1,6 +1,7 @@
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.core.paginator import Paginator
+from django.db.models import Exists, OuterRef
 from django.shortcuts import get_object_or_404
 from django.urls import reverse, reverse_lazy
 from django.views.generic import (
@@ -12,6 +13,7 @@ from django.views.generic import (
 )
 
 from companies.models import Company
+from staff.models import StaffingAssignment
 from .forms import IDTypeForm, PersonForm, PersonIDForm, PersonIDScanForm
 from .models import IDType, Person, PersonID, PersonIDScan
 
@@ -54,6 +56,41 @@ class HRAccessMixin(LoginRequiredMixin, UserPassesTestMixin):
         return user.is_superuser or user.has_perm("persons.hr_manager")
 
 
+class ActiveCompanyPersonAccessMixin:
+    """
+    Access rules:
+    - superuser:
+        * default -> only active company
+        * ?show=all -> all companies
+    - non-superuser:
+        * only active company
+    """
+
+    def get_active_company_id(self):
+        return self.request.session.get("active_company_id")
+
+    def get_show_all_flag(self):
+        return (self.request.GET.get("show") or "").strip().lower() == "all"
+
+    def get_person_queryset(self):
+        qs = Person.objects.select_related("company", "nationality")
+        active_company_id = self.get_active_company_id()
+        show_all = self.get_show_all_flag()
+        user = self.request.user
+
+        if user.is_superuser:
+            if show_all:
+                return qs
+            if active_company_id:
+                return qs.filter(company_id=active_company_id)
+            return qs.none()
+
+        if not active_company_id:
+            return qs.none()
+
+        return qs.filter(company_id=active_company_id)
+
+
 # -----------------------
 # Duplicate check helpers
 # -----------------------
@@ -91,43 +128,48 @@ def _find_duplicate_person(
 # -----------------------
 # Persons
 # -----------------------
-class PersonListView(NavbarContextMixin, HRAccessMixin, ListView):
+class PersonListView(
+    NavbarContextMixin, HRAccessMixin, ActiveCompanyPersonAccessMixin, ListView
+):
     model = Person
     template_name = "persons/index.html"
     context_object_name = "persons"
     paginate_by = 25
 
     def get_queryset(self):
-        qs = Person.objects.select_related("company", "nationality").order_by(
-            "family_name",
-            "first_name",
-            "second_name",
-            "person_id",
+        employed_subquery = StaffingAssignment.objects.filter(
+            person_id=OuterRef("pk"),
+            is_active=True,
         )
 
-        show_mode = (self.request.GET.get("show") or "").strip().lower()
-        active_company_id = self.request.session.get("active_company_id")
-
-        if show_mode != "all" and active_company_id:
-            qs = qs.filter(company_id=active_company_id)
-
-        return qs
+        return (
+            self.get_person_queryset()
+            .annotate(is_employed=Exists(employed_subquery))
+            .order_by(
+                "family_name",
+                "first_name",
+                "second_name",
+                "person_id",
+            )
+        )
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         user = self.request.user
         ctx["can_manage_hr"] = user.is_superuser or user.has_perm("persons.hr_manager")
-        ctx["show_all"] = (self.request.GET.get("show") or "").strip().lower() == "all"
+        ctx["show_all"] = self.get_show_all_flag()
         return ctx
 
 
-class PersonDetailView(NavbarContextMixin, HRAccessMixin, DetailView):
+class PersonDetailView(
+    NavbarContextMixin, HRAccessMixin, ActiveCompanyPersonAccessMixin, DetailView
+):
     model = Person
     template_name = "persons/detail.html"
     context_object_name = "person"
 
     def get_queryset(self):
-        return Person.objects.select_related("company", "nationality")
+        return self.get_person_queryset()
 
 
 class PersonCreateView(NavbarContextMixin, HRAccessMixin, CreateView):
@@ -148,7 +190,6 @@ class PersonCreateView(NavbarContextMixin, HRAccessMixin, CreateView):
 
         dup_confirm = (self.request.POST.get("dup_confirm") or "").strip() == "1"
 
-        # Duplicate found, not confirmed -> show modal, do NOT save
         if existing is not None and not dup_confirm:
             ctx = self.get_context_data(form=form)
             ctx["dup_person"] = existing
@@ -174,7 +215,9 @@ class PersonCreateView(NavbarContextMixin, HRAccessMixin, CreateView):
         return ctx
 
 
-class PersonUpdateView(NavbarContextMixin, HRAccessMixin, UpdateView):
+class PersonUpdateView(
+    NavbarContextMixin, HRAccessMixin, ActiveCompanyPersonAccessMixin, UpdateView
+):
     model = Person
     template_name = "persons/form.html"
     form_class = PersonForm
@@ -183,7 +226,7 @@ class PersonUpdateView(NavbarContextMixin, HRAccessMixin, UpdateView):
     DOCS_PAGE_PARAM = "docs_page"
 
     def get_queryset(self):
-        return Person.objects.select_related("company", "nationality")
+        return self.get_person_queryset()
 
     def form_valid(self, form):
         cd = form.cleaned_data
@@ -199,12 +242,14 @@ class PersonUpdateView(NavbarContextMixin, HRAccessMixin, UpdateView):
 
         dup_confirm = (self.request.POST.get("dup_confirm") or "").strip() == "1"
 
-        # Duplicate found, not confirmed -> show modal, do NOT save
         if existing is not None and not dup_confirm:
             ctx = self.get_context_data(form=form)
             ctx["dup_person"] = existing
             ctx["show_dup_modal"] = True
             return self.render_to_response(ctx)
+
+        # company is fixed and must not be changed on edit
+        form.instance.company_id = self.object.company_id
 
         response = super().form_valid(form)
         messages.success(self.request, "Changes saved.")
@@ -237,11 +282,16 @@ class PersonUpdateView(NavbarContextMixin, HRAccessMixin, UpdateView):
 # -----------------------
 # PersonID (Documents) CRUD
 # -----------------------
-class PersonIDBaseMixin(NavbarContextMixin, HRAccessMixin):
+class PersonIDBaseMixin(
+    NavbarContextMixin, HRAccessMixin, ActiveCompanyPersonAccessMixin
+):
     person_obj: Person
 
     def dispatch(self, request, *args, **kwargs):
-        self.person_obj = get_object_or_404(Person, pk=kwargs["person_pk"])
+        self.person_obj = get_object_or_404(
+            self.get_person_queryset(),
+            pk=kwargs["person_pk"],
+        )
         return super().dispatch(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):
@@ -341,9 +391,14 @@ class PersonIDScanBaseMixin(PersonIDBaseMixin):
     doc_obj: PersonID
 
     def dispatch(self, request, *args, **kwargs):
-        self.person_obj = get_object_or_404(Person, pk=kwargs["person_pk"])
+        self.person_obj = get_object_or_404(
+            self.get_person_queryset(),
+            pk=kwargs["person_pk"],
+        )
         self.doc_obj = get_object_or_404(
-            PersonID, pk=kwargs["doc_pk"], person=self.person_obj
+            PersonID,
+            pk=kwargs["doc_pk"],
+            person=self.person_obj,
         )
         return super(PersonIDBaseMixin, self).dispatch(request, *args, **kwargs)
 
@@ -398,7 +453,10 @@ class PersonIDScanDeleteView(PersonIDBaseMixin, DeleteView):
     template_name = "persons/scan_confirm_delete.html"
 
     def get_queryset(self):
-        return PersonIDScan.objects.filter(person_id_id=self.kwargs["doc_pk"])
+        return PersonIDScan.objects.filter(
+            person_id_id=self.kwargs["doc_pk"],
+            person_id__person=self.person_obj,
+        )
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
