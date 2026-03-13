@@ -19,30 +19,51 @@
 
   <script src="{% static 'bootstrap/js/bootstrap.bundle.min.js' %}"></script>
 
-{% if messages %}
-  <div class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 1080;">
-    {% for message in messages %}
-      <div class="toast align-items-center text-bg-{% if 'error' in message.tags %}danger{% elif 'warning' in message.tags %}warning{% elif 'success' in message.tags %}success{% else %}primary{% endif %} border-0 mb-2"
-           role="alert" aria-live="assertive" aria-atomic="true"
-           data-bs-delay="2500" data-bs-autohide="true">
-        <div class="d-flex">
-          <div class="toast-body">{{ message }}</div>
-          <button type="button" class="btn-close btn-close-white me-2 m-auto"
-                  data-bs-dismiss="toast" aria-label="Close"></button>
+  {% if messages %}
+    <div class="modal fade"
+         id="messagesModal"
+         tabindex="-1"
+         aria-labelledby="messagesModalLabel"
+         aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+
+          <div class="modal-header">
+            <h5 class="modal-title" id="messagesModalLabel">System message</h5>
+          </div>
+
+          <div class="modal-body">
+            {% for message in messages %}
+              <div class="alert mb-2 {% if 'error' in message.tags %}alert-danger{% elif 'warning' in message.tags %}alert-warning{% elif 'success' in message.tags %}alert-success{% else %}alert-primary{% endif %}">
+                {{ message }}
+              </div>
+            {% endfor %}
+          </div>
+
+          <div class="modal-footer">
+            <button type="button" class="btn btn-primary" data-bs-dismiss="modal">
+              OK
+            </button>
+          </div>
+
         </div>
       </div>
-    {% endfor %}
-  </div>
+    </div>
 
-  <script>
-    document.addEventListener("DOMContentLoaded", () => {
-      document.querySelectorAll(".toast").forEach(el => {
-        const t = new bootstrap.Toast(el);
-        t.show();
+    <script>
+      document.addEventListener("DOMContentLoaded", () => {
+        const modalEl = document.getElementById("messagesModal");
+        if (!modalEl) return;
+
+        const modal = new bootstrap.Modal(modalEl, {
+          backdrop: "static",
+          keyboard: false
+        });
+
+        modal.show();
       });
-    });
-  </script>
-{% endif %}
+    </script>
+  {% endif %}
 
 </body>
 </html>

@@ -1,0 +1,79 @@
+<div class="modal-header">
+  <h5 class="modal-title">Assign to: {{ item.position.name_long }}</h5>
+  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+</div>
+
+<div class="modal-body" id="assignment-modal-body">
+  <form method="post" action="{% url 'staff:assignment_add' item.pk %}">
+    {% csrf_token %}
+
+    {% if force %}
+      <input type="hidden" name="force" value="1">
+      <div class="alert alert-warning py-2">
+        This person already has future assignments.
+        Press <strong>Assign</strong> again to delete those assignments and continue.
+      </div>
+    {% endif %}
+
+    <div class="mb-3">
+      <label class="form-label">Position</label>
+      <input
+        type="text"
+        class="form-control"
+        value="{{ item.position.name_long }}"
+        readonly
+      >
+    </div>
+
+    <div class="mb-3">
+      <label class="form-label">Assigned on</label>
+      <input
+        type="date"
+        name="assigned_on"
+        value="{% if form.assigned_on.value %}{{ form.assigned_on.value|date:'Y-m-d' }}{% endif %}"
+        class="form-control"
+        hx-post="{% url 'staff:assignment_person_options' item.pk %}"
+        hx-trigger="change"
+        hx-target="#assignment-person-select-block"
+        hx-swap="innerHTML"
+        hx-include="closest form"
+      >
+      {% if form.assigned_on.errors %}
+        <div class="text-danger small mt-1">{{ form.assigned_on.errors }}</div>
+      {% endif %}
+    </div>
+
+    <div class="mb-3">
+      <label class="form-label">Person</label>
+
+      <div id="assignment-person-select-block">
+        {% include "staff/includes/assignment_person_select.html" with form=form item=item only %}
+      </div>
+
+      {% if form.person.errors %}
+        <div class="text-danger small mt-1">{{ form.person.errors }}</div>
+      {% endif %}
+    </div>
+
+    {% if form.non_field_errors %}
+      <div class="alert alert-danger py-2">
+        {{ form.non_field_errors }}
+      </div>
+    {% endif %}
+
+    <div class="d-flex justify-content-end gap-2">
+      <button
+        type="button"
+        class="btn btn-outline-secondary"
+        data-bs-dismiss="modal">
+        Cancel
+      </button>
+
+      <button
+        type="submit"
+        class="btn btn-primary">
+        Assign
+      </button>
+    </div>
+  </form>
+</div>

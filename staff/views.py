@@ -28,14 +28,14 @@ from .forms import (
 )
 from .models import (
     Position,
+    RosterOverride,
     Shift,
+    ShiftMembership,
     ShiftType,
+    StaffAbsence,
+    StaffingAssignment,
     StaffingPlan,
     StaffingPlanItem,
-    StaffingAssignment,
-    ShiftMembership,
-    StaffAbsence,
-    RosterOverride,
 )
 
 
@@ -1189,8 +1189,15 @@ class AssignmentsView(LoginRequiredMixin, ActiveCompanyMixin, TemplateView):
 
         items = []
         today_str = date.today().isoformat()
+        now_dt = timezone.now()
+
         for it in items_qs:
             it.vacant = max(0, int(it.position_qty) - int(it.occupied or 0))
+            for a in it.assignments.all():
+                a.is_future_assignment = bool(a.assigned_at and a.assigned_at > now_dt)
+                a.is_past_closed_assignment = bool(
+                    (not a.is_active) and a.assigned_at and a.assigned_at <= now_dt
+                )
             items.append(it)
 
         ctx["items"] = items
@@ -1206,6 +1213,45 @@ class AssignmentsView(LoginRequiredMixin, ActiveCompanyMixin, TemplateView):
             for it in items
         ]
         return ctx
+
+
+class AssignmentModalView(View):
+    def get(self, request, item_pk):
+        item = get_object_or_404(StaffingPlanItem, pk=item_pk)
+
+        form = AssignmentCreateForm(
+            company=request.session.get("active_company_id"),
+            item=item,
+        )
+
+        return render(
+            request,
+            "staff/includes/assignment_modal.html",
+            {
+                "form": form,
+                "item": item,
+            },
+        )
+
+
+class AssignmentPersonOptionsView(View):
+    def post(self, request, item_pk):
+        item = get_object_or_404(StaffingPlanItem, pk=item_pk)
+
+        form = AssignmentCreateForm(
+            request.POST,
+            company=request.session.get("active_company_id"),
+            item=item,
+        )
+
+        return render(
+            request,
+            "staff/includes/assignment_modal.html",
+            {
+                "form": form,
+                "item": item,
+            },
+        )
 
 
 class AssignmentPersonOptionsView(LoginRequiredMixin, ActiveCompanyMixin, View):
@@ -1242,45 +1288,59 @@ class AssignmentPersonOptionsView(LoginRequiredMixin, ActiveCompanyMixin, View):
         )
 
 
-class AssignmentCreateView(LoginRequiredMixin, ActiveCompanyMixin, View):
-    def post(self, request: HttpRequest, item_pk: int) -> HttpResponse:
-        company = self.get_active_company()
-        if company is None:
-            messages.error(request, "Active company is not selected.")
-            return redirect("staff:assignments")
+class AssignmentCreateView(View):
+    def post(self, request, item_pk):
+        item = get_object_or_404(StaffingPlanItem, pk=item_pk)
 
-        item = get_object_or_404(
-            StaffingPlanItem.objects.select_related("staffing_plan"),
-            pk=item_pk,
-            staffing_plan__company=company,
+        form = AssignmentCreateForm(
+            request.POST,
+            company=request.session.get("active_company_id"),
+            item=item,
         )
 
-        form = AssignmentCreateForm(request.POST, company=company, item=item)
         if not form.is_valid():
-            for err in form.errors.get("__all__", []):
-                messages.error(request, err)
-            return redirect("staff:assignments")
+            return render(
+                request,
+                "staff/includes/assignment_modal.html",
+                {"form": form, "item": item},
+            )
 
-        assigned_on = form.cleaned_data.get("assigned_on")
-        now_dt = timezone.now()
-        assigned_at_dt = (
-            _combine_date_with_now_time(assigned_on, now_dt) if assigned_on else now_dt
+        person = form.cleaned_data["person"]
+        assigned_on = form.cleaned_data["assigned_on"]
+
+        future_assignments = StaffingAssignment.objects.filter(
+            person=person,
+            assigned_at__gt=assigned_on,
         )
 
-        try:
-            with transaction.atomic():
-                assignment = form.save()
-                assignment.assigned_at = assigned_at_dt
-                assignment.released_at = None
-                assignment.is_active = True
-                assignment.save(
-                    update_fields=["assigned_at", "released_at", "is_active"]
-                )
-        except IntegrityError:
-            messages.error(request, "Failed to create assignment.")
-            return redirect("staff:assignments")
+        if future_assignments.exists() and "force" not in request.POST:
+            messages.warning(
+                request,
+                f"{person} already has future assignments. "
+                f"Press Assign again to delete them and continue.",
+            )
 
-        messages.success(request, "Assigned.")
+            return render(
+                request,
+                "staff/includes/assignment_modal.html",
+                {
+                    "form": form,
+                    "item": item,
+                    "force": True,
+                },
+            )
+
+        if "force" in request.POST:
+            future_assignments.delete()
+
+        assignment = form.save(commit=False)
+        assignment.company_id = request.session.get("active_company_id")
+        assignment.staffing_plan_item = item
+        assignment.assigned_at = assigned_on
+        assignment.save()
+
+        messages.success(request, f"{person} assigned successfully.")
+
         return redirect("staff:assignments")
 
 
@@ -1318,6 +1378,54 @@ class AssignmentReleaseView(LoginRequiredMixin, ActiveCompanyMixin, View):
             messages.info(request, "Already inactive.")
 
         return redirect("staff:assignments")
+
+
+class AssignmentDeleteView(LoginRequiredMixin, ActiveCompanyMixin, View):
+    CONFIRM_VALUE = "YES_DELETE"
+
+    def post(self, request: HttpRequest, assignment_pk: int) -> HttpResponse:
+        company = self.get_active_company()
+        if company is None:
+            messages.error(request, "Active company is not selected.")
+            return redirect("staff:assignments")
+
+        assignment = get_object_or_404(
+            StaffingAssignment,
+            pk=assignment_pk,
+            company=company,
+        )
+
+        confirm_value = (request.POST.get("confirm_delete") or "").strip()
+        if confirm_value != self.CONFIRM_VALUE:
+            messages.error(
+                request,
+                "Deletion was not confirmed.",
+            )
+            return redirect("staff:assignments")
+
+        now_dt = timezone.now()
+
+        is_future = bool(assignment.assigned_at and assignment.assigned_at > now_dt)
+        is_closed_past = bool(
+            (not assignment.is_active)
+            and assignment.assigned_at
+            and assignment.assigned_at <= now_dt
+        )
+
+        if not (is_future or is_closed_past):
+            messages.error(
+                request,
+                "You can delete only future assignments or already closed past assignments.",
+            )
+            return redirect("staff:assignments")
+
+        assignment.delete()
+        messages.success(request, "Assignment deleted permanently.")
+        return redirect("staff:assignments")
+
+
+class AssignmentDeleteFutureView(AssignmentDeleteView):
+    pass
 
 
 class AssignmentReleaseAllView(LoginRequiredMixin, ActiveCompanyMixin, View):

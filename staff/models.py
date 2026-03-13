@@ -445,6 +445,33 @@ class StaffingAssignment(models.Model):
                 }
             )
 
+        if not self.person_id or not self.assigned_at:
+            return
+
+        overlap_qs = StaffingAssignment.objects.filter(person_id=self.person_id)
+
+        if self.pk:
+            overlap_qs = overlap_qs.exclude(pk=self.pk)
+
+        if self.released_at is None:
+            overlap_qs = overlap_qs.filter(
+                Q(released_at__isnull=True) | Q(released_at__gte=self.assigned_at)
+            )
+        else:
+            overlap_qs = overlap_qs.filter(assigned_at__lte=self.released_at).filter(
+                Q(released_at__isnull=True) | Q(released_at__gte=self.assigned_at)
+            )
+
+        if overlap_qs.exists():
+            raise ValidationError(
+                {
+                    "person": (
+                        "This person already has another assignment overlapping "
+                        "with this assignment period."
+                    )
+                }
+            )
+
     def save(self, *args, **kwargs):
         self.full_clean()
         return super().save(*args, **kwargs)

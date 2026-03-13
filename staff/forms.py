@@ -11,14 +11,14 @@ from persons.models import Person
 
 from .models import (
     Position,
-    ShiftType,
+    RosterOverride,
     Shift,
+    ShiftMembership,
+    ShiftType,
+    StaffAbsence,
+    StaffingAssignment,
     StaffingPlan,
     StaffingPlanItem,
-    StaffingAssignment,
-    ShiftMembership,
-    StaffAbsence,
-    RosterOverride,
 )
 
 
@@ -414,16 +414,18 @@ class AssignmentCreateForm(forms.Form):
         if assigned_on is None:
             assigned_on = date.today()
 
-        conflicting_person_ids = StaffingAssignment.objects.filter(
+        qs = Person.objects.all()
+
+        company_id = getattr(self.company, "id", self.company)
+        if company_id is not None:
+            qs = qs.filter(company_id=company_id)
+
+        busy_person_ids = StaffingAssignment.objects.filter(
             _assignment_conflict_q(assigned_on)
         ).values_list("person_id", flat=True)
 
-        qs = Person.objects.all()
-        if self.company is not None:
-            qs = qs.filter(company=self.company)
-
         self.fields["person"].queryset = qs.exclude(
-            person_id__in=conflicting_person_ids
+            person_id__in=busy_person_ids
         ).order_by("person_id", "family_name", "first_name", "second_name")
 
     def clean(self):
@@ -434,7 +436,9 @@ class AssignmentCreateForm(forms.Form):
         if self.company is None or self.item is None or person is None:
             return cleaned
 
-        if person.company_id != self.company.id:
+        company_id = getattr(self.company, "id", self.company)
+
+        if person.company_id != company_id:
             raise ValidationError(
                 "You can assign only persons created under the active company."
             )
@@ -461,24 +465,30 @@ class AssignmentCreateForm(forms.Form):
             .exists()
         ):
             raise ValidationError(
-                "This person already has an assignment on the selected date."
+                "This person is already assigned on the selected date."
             )
 
         return cleaned
 
-    def save(self) -> StaffingAssignment:
+    def save(self, commit: bool = True) -> StaffingAssignment:
         if self.company is None or self.item is None:
             raise ValueError("company and item are required")
 
         person: Person = self.cleaned_data["person"]
+        company_id = getattr(self.company, "id", self.company)
 
-        return StaffingAssignment.objects.create(
+        assignment = StaffingAssignment(
             staffing_plan_item=self.item,
             person=person,
-            company=self.company,
+            company_id=company_id,
             is_active=True,
             released_at=None,
         )
+
+        if commit:
+            assignment.save()
+
+        return assignment
 
 
 class ShiftMembershipForm(forms.ModelForm):
