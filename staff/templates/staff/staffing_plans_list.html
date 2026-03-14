@@ -38,20 +38,66 @@
               <tr>
                 <th style="width: 120px;">Active</th>
                 <th>Name</th>
-                <th style="width: 120px;">Items</th>
-                <th style="width: 220px;">Created</th>
-                <th style="width: 220px;">Updated</th>
+                <th style="width: 140px;">Active from</th>
+                <th style="width: 140px;">Active to</th>
+                <th style="width: 100px;">Items</th>
+                <th style="width: 180px;">Created</th>
+                <th style="width: 180px;">Updated</th>
               </tr>
             </thead>
 
             <tbody>
+              {% now "Y-m-d" as today_str %}
+
               {% for plan in staffing_plans %}
-                <tr class="plan-row"
-                    data-href="{% url 'staff:staffing_plans_edit' plan.pk %}"
-                    style="cursor:pointer;">
+                {% if plan.active_from or plan.active_to %}
+                  {% if plan.active_from and plan.active_from|date:"Y-m-d" > today_str %}
+                    <tr class="plan-row table-warning"
+                        data-href="{% url 'staff:staffing_plans_edit' plan.pk %}"
+                        style="cursor:pointer;">
+                  {% elif plan.active_to and plan.active_to|date:"Y-m-d" < today_str %}
+                    <tr class="plan-row table-secondary"
+                        data-href="{% url 'staff:staffing_plans_edit' plan.pk %}"
+                        style="cursor:pointer;">
+                  {% elif plan.is_active %}
+                    <tr class="plan-row table-success"
+                        data-href="{% url 'staff:staffing_plans_edit' plan.pk %}"
+                        style="cursor:pointer;">
+                  {% else %}
+                    <tr class="plan-row"
+                        data-href="{% url 'staff:staffing_plans_edit' plan.pk %}"
+                        style="cursor:pointer;">
+                  {% endif %}
+                {% else %}
+                  {% if plan.is_active %}
+                    <tr class="plan-row table-success"
+                        data-href="{% url 'staff:staffing_plans_edit' plan.pk %}"
+                        style="cursor:pointer;">
+                  {% else %}
+                    <tr class="plan-row"
+                        data-href="{% url 'staff:staffing_plans_edit' plan.pk %}"
+                        style="cursor:pointer;">
+                  {% endif %}
+                {% endif %}
 
                   <td class="text-nowrap">
-                    {% if plan.is_active %}
+                    {% if plan.active_from and plan.active_from|date:"Y-m-d" > today_str %}
+                      <button type="button"
+                              class="btn btn-sm btn-outline-warning plan-toggle-btn"
+                              title="Plan start date is in the future"
+                              disabled>
+                        Wait
+                      </button>
+
+                    {% elif plan.active_to and plan.active_to|date:"Y-m-d" < today_str %}
+                      <button type="button"
+                              class="btn btn-sm btn-outline-secondary plan-toggle-btn"
+                              title="Plan is out of date range"
+                              disabled>
+                        Out
+                      </button>
+
+                    {% elif plan.is_active %}
                       <form class="d-inline"
                             method="post"
                             action="{% url 'staff:staffing_plans_delete' plan.pk %}{% if show_all %}?show=all{% endif %}">
@@ -62,6 +108,7 @@
                           Yes
                         </button>
                       </form>
+
                     {% else %}
                       <form class="d-inline"
                             method="post"
@@ -84,13 +131,29 @@
                     {% endif %}
                   </td>
 
+                  <td>
+                    {% if plan.active_from %}
+                      {{ plan.active_from|date:"SHORT_DATE_FORMAT" }}
+                    {% else %}
+                      <span class="text-muted">—</span>
+                    {% endif %}
+                  </td>
+
+                  <td>
+                    {% if plan.active_to %}
+                      {{ plan.active_to|date:"SHORT_DATE_FORMAT" }}
+                    {% else %}
+                      <span class="text-muted">Open-ended</span>
+                    {% endif %}
+                  </td>
+
                   <td>{{ plan.items.count }}</td>
                   <td>{{ plan.created_at|date:"SHORT_DATE_FORMAT" }} {{ plan.created_at|time:"H:i" }}</td>
                   <td>{{ plan.updated_at|date:"SHORT_DATE_FORMAT" }} {{ plan.updated_at|time:"H:i" }}</td>
                 </tr>
               {% empty %}
                 <tr>
-                  <td colspan="5" class="text-center p-4 text-muted">No staffing plans found.</td>
+                  <td colspan="7" class="text-center p-4 text-muted">No staffing plans found.</td>
                 </tr>
               {% endfor %}
             </tbody>

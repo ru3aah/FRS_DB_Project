@@ -6,6 +6,7 @@ from django import forms
 from django.core.exceptions import ValidationError
 from django.db.models import Q
 from django.forms import inlineformset_factory
+from django.utils import timezone
 
 from persons.models import Person
 
@@ -345,11 +346,48 @@ class ShiftPackageCreateForm(forms.Form):
 class StaffingPlanForm(forms.ModelForm):
     class Meta:
         model = StaffingPlan
-        fields = ["staffing_plan_name", "is_active"]
+        fields = ["staffing_plan_name", "active_from", "active_to", "is_active"]
         widgets = {
             "staffing_plan_name": forms.TextInput(attrs={"class": "form-control"}),
+            "active_from": forms.DateInput(
+                attrs={"type": "date", "class": "form-control"}
+            ),
+            "active_to": forms.DateInput(
+                attrs={"type": "date", "class": "form-control"}
+            ),
             "is_active": forms.CheckboxInput(attrs={"class": "form-check-input"}),
         }
+
+    def clean(self):
+        cleaned = super().clean()
+        active_from = cleaned.get("active_from")
+        active_to = cleaned.get("active_to")
+        is_active = bool(cleaned.get("is_active"))
+        today = timezone.localdate()
+
+        if not active_from:
+            self.add_error("active_from", "Active from is required.")
+
+        if active_from and active_to and active_to < active_from:
+            self.add_error(
+                "active_to",
+                "Active to cannot be earlier than active from.",
+            )
+
+        if is_active and active_from:
+            if today < active_from:
+                self.add_error(
+                    "is_active",
+                    "Plan cannot be active before its active from date.",
+                )
+
+            if active_to and today > active_to:
+                self.add_error(
+                    "is_active",
+                    "Plan cannot be active after its active to date.",
+                )
+
+        return cleaned
 
 
 class StaffingPlanItemForm(forms.ModelForm):

@@ -313,6 +313,7 @@ class Shift(models.Model):
 class StaffingPlan(models.Model):
     """
     Staffing plan header (for a company).
+    Contains only positions and quantities.
     """
 
     staffing_plan_id = models.BigAutoField(primary_key=True)
@@ -331,6 +332,18 @@ class StaffingPlan(models.Model):
         help_text="Human-readable staffing plan name",
     )
 
+    active_from = models.DateField(
+        blank=True,
+        null=True,
+        help_text="Date from which this staffing plan becomes effective.",
+    )
+
+    active_to = models.DateField(
+        blank=True,
+        null=True,
+        help_text="Date until which this staffing plan is effective.",
+    )
+
     is_active = models.BooleanField(default=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
@@ -339,6 +352,18 @@ class StaffingPlan(models.Model):
     class Meta:
         db_table = "staff_staffing_plans"
         ordering = ["-is_active", "-updated_at"]
+
+    def clean(self):
+        super().clean()
+
+        if self.active_from and self.active_to and self.active_to < self.active_from:
+            raise ValidationError(
+                {"active_to": "Active to date cannot be earlier than active from date."}
+            )
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
 
     def __str__(self) -> str:
         name = (self.staffing_plan_name or "").strip()
@@ -533,13 +558,15 @@ class ShiftMembership(models.Model):
 
 class StaffAbsence(models.Model):
     """
-    Absences for roster (sick leave / vacation / day-off etc.).
+    Temporary absence from work.
+    Any absence may have one or more supporting documents.
     """
 
     ABSENCE_TYPE_CHOICES = (
         ("sick", "Sick leave"),
-        ("vac", "Vacation"),
-        ("off", "Day off"),
+        ("annual_leave", "Annual paid leave"),
+        ("unpaid_leave", "Unpaid leave"),
+        ("absent_without_leave", "Absent without leave"),
         ("other", "Other"),
     )
 
@@ -558,7 +585,7 @@ class StaffAbsence(models.Model):
     )
 
     absence_type = models.CharField(
-        max_length=8,
+        max_length=24,
         choices=ABSENCE_TYPE_CHOICES,
         default="other",
     )
@@ -580,13 +607,279 @@ class StaffAbsence(models.Model):
             ),
         ]
 
+    def clean(self):
+        super().clean()
+
+        if self.date_to < self.date_from:
+            raise ValidationError(
+                {"date_to": "Absence end date cannot be earlier than start date."}
+            )
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
     def __str__(self) -> str:
         return f"{self.person} absence {self.date_from}..{self.date_to}"
 
 
+class StaffAbsenceDocument(models.Model):
+    """
+    Supporting documents for absence.
+    """
+
+    absence_document_id = models.BigAutoField(primary_key=True)
+
+    absence = models.ForeignKey(
+        StaffAbsence,
+        on_delete=models.CASCADE,
+        related_name="documents",
+    )
+
+    document_name = models.CharField(
+        max_length=100,
+        blank=True,
+        default="",
+        help_text="Optional document name shown in UI.",
+    )
+
+    file = models.FileField(
+        upload_to="staff/absences/documents/",
+        help_text="Supporting document for absence.",
+    )
+
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "staff_absence_documents"
+        ordering = ["-uploaded_at"]
+
+    def __str__(self) -> str:
+        return f"Absence doc for {self.absence_id} ({self.uploaded_at:%Y-%m-%d})"
+
+
+class TemporaryCover(models.Model):
+    """
+    Temporary replacement when one worker covers another worker's duty.
+    This does not change the base staffing assignment.
+    """
+
+    temporary_cover_id = models.BigAutoField(primary_key=True)
+
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name="temporary_covers",
+    )
+
+    day = models.DateField(db_index=True)
+
+    staffing_plan_item = models.ForeignKey(
+        StaffingPlanItem,
+        on_delete=models.CASCADE,
+        related_name="temporary_covers",
+    )
+
+    absent_person = models.ForeignKey(
+        Person,
+        on_delete=models.PROTECT,
+        related_name="temporary_covers_as_absent",
+        blank=True,
+        null=True,
+        help_text="Person who is absent / replaced.",
+    )
+
+    covering_person = models.ForeignKey(
+        Person,
+        on_delete=models.PROTECT,
+        related_name="temporary_covers_as_covering",
+        help_text="Person who covers the duty.",
+    )
+
+    note = models.CharField(max_length=255, blank=True, default="")
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "staff_temporary_covers"
+        ordering = ["-is_active", "-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["company", "day", "staffing_plan_item", "covering_person"],
+                name="uq_temp_cover_company_day_item_covering_person",
+            ),
+        ]
+
+    def clean(self):
+        super().clean()
+
+        if (
+            self.staffing_plan_item_id
+            and self.company_id
+            and self.staffing_plan_item.staffing_plan.company_id != self.company_id
+        ):
+            raise ValidationError(
+                {"company": "Temporary cover company must match staffing plan company."}
+            )
+
+        if self.absent_person_id and self.absent_person_id == self.covering_person_id:
+            raise ValidationError(
+                {
+                    "covering_person": "Covering person cannot be the same as absent person."
+                }
+            )
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
+    def __str__(self) -> str:
+        return f"{self.day} | {self.staffing_plan_item} -> {self.covering_person}"
+
+
+class TemporaryCoverDocument(models.Model):
+    """
+    Supporting documents for temporary cover.
+    """
+
+    temporary_cover_document_id = models.BigAutoField(primary_key=True)
+
+    temporary_cover = models.ForeignKey(
+        TemporaryCover,
+        on_delete=models.CASCADE,
+        related_name="documents",
+    )
+
+    document_name = models.CharField(
+        max_length=100,
+        blank=True,
+        default="",
+        help_text="Optional document name shown in UI.",
+    )
+
+    file = models.FileField(
+        upload_to="staff/temporary_covers/documents/",
+        help_text="Supporting document for temporary cover.",
+    )
+
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "staff_temporary_cover_documents"
+        ordering = ["-uploaded_at"]
+
+    def __str__(self) -> str:
+        return (
+            f"Temporary cover doc for {self.temporary_cover_id} "
+            f"({self.uploaded_at:%Y-%m-%d})"
+        )
+
+
+class ExtraWork(models.Model):
+    """
+    Additional work outside the base shift schedule.
+    Worker agrees to work extra day(s) beyond normal roster.
+    """
+
+    extra_work_id = models.BigAutoField(primary_key=True)
+
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name="extra_works",
+    )
+
+    person = models.ForeignKey(
+        Person,
+        on_delete=models.PROTECT,
+        related_name="extra_works",
+    )
+
+    day = models.DateField(db_index=True)
+
+    staffing_plan_item = models.ForeignKey(
+        StaffingPlanItem,
+        on_delete=models.CASCADE,
+        related_name="extra_works",
+        blank=True,
+        null=True,
+        help_text="Optional slot/position for which extra work is performed.",
+    )
+
+    note = models.CharField(max_length=255, blank=True, default="")
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "staff_extra_works"
+        ordering = ["-is_active", "-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["company", "person", "day"],
+                name="uq_extra_work_company_person_day",
+            ),
+        ]
+
+    def clean(self):
+        super().clean()
+
+        if (
+            self.staffing_plan_item_id
+            and self.company_id
+            and self.staffing_plan_item.staffing_plan.company_id != self.company_id
+        ):
+            raise ValidationError(
+                {"company": "Extra work company must match staffing plan company."}
+            )
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
+    def __str__(self) -> str:
+        return f"{self.person} extra work on {self.day}"
+
+
+class ExtraWorkDocument(models.Model):
+    """
+    Supporting documents for extra work.
+    """
+
+    extra_work_document_id = models.BigAutoField(primary_key=True)
+
+    extra_work = models.ForeignKey(
+        ExtraWork,
+        on_delete=models.CASCADE,
+        related_name="documents",
+    )
+
+    document_name = models.CharField(
+        max_length=100,
+        blank=True,
+        default="",
+        help_text="Optional document name shown in UI.",
+    )
+
+    file = models.FileField(
+        upload_to="staff/extra_work/documents/",
+        help_text="Supporting document for extra work.",
+    )
+
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "staff_extra_work_documents"
+        ordering = ["-uploaded_at"]
+
+    def __str__(self) -> str:
+        return f"Extra work doc for {self.extra_work_id} ({self.uploaded_at:%Y-%m-%d})"
+
+
 class RosterOverride(models.Model):
     """
-    One-day replacement / override for roster.
+    Legacy one-day replacement / override for roster.
+    Kept temporarily for compatibility until UI/views are migrated
+    to TemporaryCover / ExtraWork workflow.
     """
 
     override_id = models.BigAutoField(primary_key=True)

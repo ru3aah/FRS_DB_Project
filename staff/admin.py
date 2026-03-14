@@ -1,15 +1,20 @@
 from django.contrib import admin
 
 from .models import (
+    ExtraWork,
+    ExtraWorkDocument,
     Position,
+    RosterOverride,
     Shift,
+    ShiftMembership,
     ShiftType,
+    StaffAbsence,
+    StaffAbsenceDocument,
+    StaffingAssignment,
     StaffingPlan,
     StaffingPlanItem,
-    StaffingAssignment,
-    ShiftMembership,
-    StaffAbsence,
-    RosterOverride,
+    TemporaryCover,
+    TemporaryCoverDocument,
 )
 
 
@@ -89,10 +94,12 @@ class StaffingPlanAdmin(admin.ModelAdmin):
         "staffing_plan_id",
         "company",
         "staffing_plan_name",
+        "active_from",
+        "active_to",
         "is_active",
         "updated_at",
     )
-    list_filter = ("company", "is_active")
+    list_filter = ("company", "is_active", "active_from", "active_to")
     search_fields = ("staffing_plan_name",)
     ordering = ("company", "-is_active", "-updated_at")
     readonly_fields = ("created_at", "updated_at")
@@ -111,7 +118,11 @@ class StaffingAssignmentAdmin(admin.ModelAdmin):
         "released_at",
     )
     list_filter = ("company", "is_active")
-    search_fields = ("person__first_name", "person__family_name")
+    search_fields = (
+        "person__first_name",
+        "person__second_name",
+        "person__family_name",
+    )
     ordering = ("company", "-is_active", "-assigned_at")
 
 
@@ -130,6 +141,13 @@ class ShiftMembershipAdmin(admin.ModelAdmin):
     search_fields = ("person__first_name", "person__second_name", "person__family_name")
     ordering = ("company", "-is_active", "-assigned_at")
     readonly_fields = ("assigned_at",)
+
+
+class StaffAbsenceDocumentInline(admin.TabularInline):
+    model = StaffAbsenceDocument
+    extra = 0
+    fields = ("document_name", "file", "uploaded_at")
+    readonly_fields = ("uploaded_at",)
 
 
 @admin.register(StaffAbsence)
@@ -153,6 +171,71 @@ class StaffAbsenceAdmin(admin.ModelAdmin):
     )
     ordering = ("company", "-is_active", "-created_at")
     readonly_fields = ("created_at",)
+    inlines = [StaffAbsenceDocumentInline]
+
+
+class TemporaryCoverDocumentInline(admin.TabularInline):
+    model = TemporaryCoverDocument
+    extra = 0
+    fields = ("document_name", "file", "uploaded_at")
+    readonly_fields = ("uploaded_at",)
+
+
+@admin.register(TemporaryCover)
+class TemporaryCoverAdmin(admin.ModelAdmin):
+    list_display = (
+        "temporary_cover_id",
+        "company",
+        "day",
+        "staffing_plan_item",
+        "absent_person",
+        "covering_person",
+        "is_active",
+        "created_at",
+    )
+    list_filter = ("company", "day", "is_active")
+    search_fields = (
+        "covering_person__first_name",
+        "covering_person__second_name",
+        "covering_person__family_name",
+        "absent_person__first_name",
+        "absent_person__second_name",
+        "absent_person__family_name",
+        "note",
+    )
+    ordering = ("company", "-is_active", "-created_at")
+    readonly_fields = ("created_at",)
+    inlines = [TemporaryCoverDocumentInline]
+
+
+class ExtraWorkDocumentInline(admin.TabularInline):
+    model = ExtraWorkDocument
+    extra = 0
+    fields = ("document_name", "file", "uploaded_at")
+    readonly_fields = ("uploaded_at",)
+
+
+@admin.register(ExtraWork)
+class ExtraWorkAdmin(admin.ModelAdmin):
+    list_display = (
+        "extra_work_id",
+        "company",
+        "person",
+        "day",
+        "staffing_plan_item",
+        "is_active",
+        "created_at",
+    )
+    list_filter = ("company", "day", "is_active")
+    search_fields = (
+        "person__first_name",
+        "person__second_name",
+        "person__family_name",
+        "note",
+    )
+    ordering = ("company", "-is_active", "-created_at")
+    readonly_fields = ("created_at",)
+    inlines = [ExtraWorkDocumentInline]
 
 
 @admin.register(RosterOverride)

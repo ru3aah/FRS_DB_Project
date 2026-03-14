@@ -33,7 +33,9 @@
         {% csrf_token %}
 
         {% if form.non_field_errors %}
-          <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+          <div class="alert alert-danger">
+            {{ form.non_field_errors }}
+          </div>
         {% endif %}
 
         <div class="mb-3">
@@ -42,6 +44,27 @@
           {% if form.staffing_plan_name.errors %}
             <div class="text-danger small">{{ form.staffing_plan_name.errors }}</div>
           {% endif %}
+        </div>
+
+        <div class="row g-3 mb-3">
+          <div class="col-md-6">
+            <label class="form-label">Active from</label>
+            {{ form.active_from }}
+            {% if form.active_from.errors %}
+              <div class="text-danger small">{{ form.active_from.errors }}</div>
+            {% endif %}
+          </div>
+
+          <div class="col-md-6">
+            <label class="form-label">Active to</label>
+            {{ form.active_to }}
+            {% if form.active_to.errors %}
+              <div class="text-danger small">{{ form.active_to.errors }}</div>
+            {% endif %}
+            <div class="form-text">
+              Leave empty if end date is not defined.
+            </div>
+          </div>
         </div>
 
         <div class="mb-3 form-check">
@@ -89,7 +112,9 @@
                 <tr class="item-row">
                   <td>
                     {{ f.position }}
-                    {% if f.position.errors %}<div class="text-danger small">{{ f.position.errors }}</div>{% endif %}
+                    {% if f.position.errors %}
+                      <div class="text-danger small">{{ f.position.errors }}</div>
+                    {% endif %}
                   </td>
 
                   <td class="text-center">
@@ -101,7 +126,6 @@
 
                   <td class="text-center">
                     {{ f.DELETE }}
-
                     <div class="d-none">
                       {% for hidden in f.hidden_fields %}
                         {{ hidden }}

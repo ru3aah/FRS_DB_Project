@@ -51,10 +51,38 @@ class StaffHomeView(LoginRequiredMixin, TemplateView):
     template_name = "staff/index.html"
 
 
+def _plan_is_effective_on_day(plan: StaffingPlan, day: date) -> bool:
+    if plan.active_from and day < plan.active_from:
+        return False
+    if plan.active_to and day > plan.active_to:
+        return False
+    return True
+
+
+def _plan_is_effective_today(plan: StaffingPlan) -> bool:
+    return _plan_is_effective_on_day(plan, timezone.localdate())
+
+
+def _deactivate_out_of_range_plans(company: Company) -> None:
+    today = timezone.localdate()
+
+    outdated_qs = StaffingPlan.objects.filter(company=company, is_active=True).filter(
+        Q(active_from__gt=today) | Q(active_to__lt=today)
+    )
+
+    if outdated_qs.exists():
+        outdated_qs.update(is_active=False)
+
+
 def _get_active_plan(company: Company) -> StaffingPlan | None:
+    _deactivate_out_of_range_plans(company)
+    today = timezone.localdate()
+
     return (
         StaffingPlan.objects.filter(company=company, is_active=True)
-        .order_by("-updated_at")
+        .filter(Q(active_from__isnull=True) | Q(active_from__lte=today))
+        .filter(Q(active_to__isnull=True) | Q(active_to__gte=today))
+        .order_by("-active_from", "-updated_at")
         .first()
     )
 
@@ -65,6 +93,65 @@ def _dt_to_local_date(dt) -> date | None:
     if timezone.is_aware(dt):
         return timezone.localtime(dt).date()
     return dt.date()
+
+
+def _parse_date_from_post(value: str | None):
+    if not value:
+        return None
+    try:
+        return datetime.strptime(value, "%Y-%m-%d").date()
+    except ValueError:
+        return None
+
+
+def _combine_date_with_now_time(chosen_date, now_dt):
+    if chosen_date is None:
+        chosen_date = now_dt.date()
+
+    dt = datetime(
+        year=chosen_date.year,
+        month=chosen_date.month,
+        day=chosen_date.day,
+        hour=now_dt.hour,
+        minute=now_dt.minute,
+        second=now_dt.second,
+        microsecond=now_dt.microsecond,
+    )
+    if timezone.is_aware(now_dt):
+        return timezone.make_aware(dt, timezone.get_current_timezone())
+    return dt
+
+
+def _get_month_start_end(month_str: str | None) -> tuple[date, date]:
+    today = timezone.localdate()
+    if month_str:
+        try:
+            y, m = month_str.split("-")
+            first = date(int(y), int(m), 1)
+        except Exception:
+            first = date(today.year, today.month, 1)
+    else:
+        first = date(today.year, today.month, 1)
+
+    last_day = monthrange(first.year, first.month)[1]
+    last = date(first.year, first.month, last_day)
+    return first, last
+
+
+def _is_absent(
+    absences_by_person: dict[int, list[tuple[date, date]]], person_id: int, day: date
+) -> bool:
+    for d1, d2 in absences_by_person.get(person_id, []):
+        if d1 <= day <= d2:
+            return True
+    return False
+
+
+def _plan_has_active_assignments(plan: StaffingPlan) -> bool:
+    return StaffingAssignment.objects.filter(
+        is_active=True,
+        staffing_plan_item__staffing_plan=plan,
+    ).exists()
 
 
 def _get_people_from_active_plan(
@@ -135,11 +222,7 @@ class StaffShiftMembershipView(LoginRequiredMixin, ActiveCompanyMixin, TemplateV
             messages.error(request, "Active company is not selected.")
             return redirect("staff:staff_members")
 
-        plan = (
-            StaffingPlan.objects.filter(company=company, is_active=True)
-            .order_by("-updated_at")
-            .first()
-        )
+        plan = _get_active_plan(company)
         if plan is None:
             messages.error(request, "No active staffing plan found.")
             return redirect("staff:staff_members")
@@ -271,58 +354,6 @@ class StaffShiftMembershipView(LoginRequiredMixin, ActiveCompanyMixin, TemplateV
         return ctx
 
 
-def _parse_date_from_post(value: str | None):
-    if not value:
-        return None
-    try:
-        return datetime.strptime(value, "%Y-%m-%d").date()
-    except ValueError:
-        return None
-
-
-def _combine_date_with_now_time(chosen_date, now_dt):
-    if chosen_date is None:
-        chosen_date = now_dt.date()
-
-    dt = datetime(
-        year=chosen_date.year,
-        month=chosen_date.month,
-        day=chosen_date.day,
-        hour=now_dt.hour,
-        minute=now_dt.minute,
-        second=now_dt.second,
-        microsecond=now_dt.microsecond,
-    )
-    if timezone.is_aware(now_dt):
-        return timezone.make_aware(dt, timezone.get_current_timezone())
-    return dt
-
-
-def _get_month_start_end(month_str: str | None) -> tuple[date, date]:
-    today = timezone.localdate()
-    if month_str:
-        try:
-            y, m = month_str.split("-")
-            first = date(int(y), int(m), 1)
-        except Exception:
-            first = date(today.year, today.month, 1)
-    else:
-        first = date(today.year, today.month, 1)
-
-    last_day = monthrange(first.year, first.month)[1]
-    last = date(first.year, first.month, last_day)
-    return first, last
-
-
-def _is_absent(
-    absences_by_person: dict[int, list[tuple[date, date]]], person_id: int, day: date
-) -> bool:
-    for d1, d2 in absences_by_person.get(person_id, []):
-        if d1 <= day <= d2:
-            return True
-    return False
-
-
 class StaffRosterView(LoginRequiredMixin, ActiveCompanyMixin, TemplateView):
     template_name = "staff/roster.html"
 
@@ -343,11 +374,7 @@ class StaffRosterView(LoginRequiredMixin, ActiveCompanyMixin, TemplateView):
             ctx["rows"] = []
             return ctx
 
-        plan = (
-            StaffingPlan.objects.filter(company=company, is_active=True)
-            .order_by("-updated_at")
-            .first()
-        )
+        plan = _get_active_plan(company)
         ctx["plan"] = plan
         if plan is None:
             ctx["days"] = []
@@ -930,13 +957,6 @@ class ShiftDeactivateView(LoginRequiredMixin, ActiveCompanyMixin, View):
         return redirect("staff:shifts_list")
 
 
-def _plan_has_active_assignments(plan: StaffingPlan) -> bool:
-    return StaffingAssignment.objects.filter(
-        is_active=True,
-        staffing_plan_item__staffing_plan=plan,
-    ).exists()
-
-
 class StaffingPlanListView(LoginRequiredMixin, ActiveCompanyMixin, ListView):
     model = StaffingPlan
     template_name = "staff/staffing_plans_list.html"
@@ -947,6 +967,8 @@ class StaffingPlanListView(LoginRequiredMixin, ActiveCompanyMixin, ListView):
         company = self.get_active_company()
         if company is None:
             return StaffingPlan.objects.none()
+
+        _deactivate_out_of_range_plans(company)
 
         qs = StaffingPlan.objects.filter(company=company)
         if self.request.GET.get("show") != "all":
@@ -1007,6 +1029,8 @@ class StaffingPlanBaseMixin(ActiveCompanyMixin):
             messages.error(self.request, "Active company is not selected.")
             return redirect("staff:staffing_plans_list")
 
+        _deactivate_out_of_range_plans(company)
+
         plan: StaffingPlan = form.instance
         plan.company = company
 
@@ -1016,6 +1040,8 @@ class StaffingPlanBaseMixin(ActiveCompanyMixin):
                 self.get_context_data(form=form, items_formset=items_formset)
             )
 
+        today = timezone.localdate()
+
         with transaction.atomic():
             self.object = form.save()
             items_formset.instance = self.object
@@ -1024,12 +1050,27 @@ class StaffingPlanBaseMixin(ActiveCompanyMixin):
             desired_active = bool(self.object.is_active)
 
             if desired_active:
+                if not _plan_is_effective_on_day(self.object, today):
+                    StaffingPlan.objects.filter(pk=self.object.pk).update(
+                        is_active=False
+                    )
+                    self.object.is_active = False
+                    form.add_error(
+                        "is_active",
+                        "Cannot activate this plan: today's date is outside the plan period.",
+                    )
+                    transaction.set_rollback(True)
+                    return self.render_to_response(
+                        self.get_context_data(form=form, items_formset=items_formset)
+                    )
+
                 other_active = (
                     StaffingPlan.objects.filter(company=company, is_active=True)
                     .exclude(pk=self.object.pk)
                     .order_by("-updated_at")
                     .first()
                 )
+
                 if other_active and _plan_has_active_assignments(other_active):
                     StaffingPlan.objects.filter(pk=self.object.pk).update(
                         is_active=False
@@ -1088,10 +1129,19 @@ class StaffingPlanActivateView(LoginRequiredMixin, ActiveCompanyMixin, View):
             messages.error(request, "Active company is not selected.")
             return redirect("staff:staffing_plans_list")
 
+        _deactivate_out_of_range_plans(company)
+
         target = get_object_or_404(StaffingPlan, pk=pk, company=company)
 
         if target.is_active:
             messages.info(request, "This staffing plan is already active.")
+            return redirect("staff:staffing_plans_list")
+
+        if not _plan_is_effective_today(target):
+            messages.error(
+                request,
+                "Cannot activate this plan: today's date is outside the plan period.",
+            )
             return redirect("staff:staffing_plans_list")
 
         current_active = (
@@ -1159,15 +1209,7 @@ class AssignmentsView(LoginRequiredMixin, ActiveCompanyMixin, TemplateView):
             ctx["rows"] = []
             return ctx
 
-        plan = (
-            StaffingPlan.objects.filter(company=company, is_active=True)
-            .order_by("-updated_at")
-            .first()
-            or StaffingPlan.objects.filter(company=company)
-            .order_by("-updated_at")
-            .first()
-        )
-
+        plan = _get_active_plan(company)
         ctx["plan"] = plan
         if plan is None:
             ctx["rows"] = []
@@ -1215,32 +1257,20 @@ class AssignmentsView(LoginRequiredMixin, ActiveCompanyMixin, TemplateView):
         return ctx
 
 
-class AssignmentModalView(View):
-    def get(self, request, item_pk):
-        item = get_object_or_404(StaffingPlanItem, pk=item_pk)
+class AssignmentModalView(LoginRequiredMixin, ActiveCompanyMixin, View):
+    def get(self, request: HttpRequest, item_pk: int) -> HttpResponse:
+        company = self.get_active_company()
+        if company is None:
+            return HttpResponse("")
 
-        form = AssignmentCreateForm(
-            company=request.session.get("active_company_id"),
-            item=item,
+        item = get_object_or_404(
+            StaffingPlanItem.objects.select_related("staffing_plan"),
+            pk=item_pk,
+            staffing_plan__company=company,
         )
 
-        return render(
-            request,
-            "staff/includes/assignment_modal.html",
-            {
-                "form": form,
-                "item": item,
-            },
-        )
-
-
-class AssignmentPersonOptionsView(View):
-    def post(self, request, item_pk):
-        item = get_object_or_404(StaffingPlanItem, pk=item_pk)
-
         form = AssignmentCreateForm(
-            request.POST,
-            company=request.session.get("active_company_id"),
+            company=company,
             item=item,
         )
 
@@ -1288,13 +1318,22 @@ class AssignmentPersonOptionsView(LoginRequiredMixin, ActiveCompanyMixin, View):
         )
 
 
-class AssignmentCreateView(View):
-    def post(self, request, item_pk):
-        item = get_object_or_404(StaffingPlanItem, pk=item_pk)
+class AssignmentCreateView(LoginRequiredMixin, ActiveCompanyMixin, View):
+    def post(self, request: HttpRequest, item_pk: int) -> HttpResponse:
+        company = self.get_active_company()
+        if company is None:
+            messages.error(request, "Active company is not selected.")
+            return redirect("staff:assignments")
+
+        item = get_object_or_404(
+            StaffingPlanItem.objects.select_related("staffing_plan"),
+            pk=item_pk,
+            staffing_plan__company=company,
+        )
 
         form = AssignmentCreateForm(
             request.POST,
-            company=request.session.get("active_company_id"),
+            company=company,
             item=item,
         )
 
@@ -1310,7 +1349,7 @@ class AssignmentCreateView(View):
 
         future_assignments = StaffingAssignment.objects.filter(
             person=person,
-            assigned_at__gt=assigned_on,
+            assigned_at__date__gt=assigned_on,
         )
 
         if future_assignments.exists() and "force" not in request.POST:
@@ -1333,14 +1372,16 @@ class AssignmentCreateView(View):
         if "force" in request.POST:
             future_assignments.delete()
 
+        now_dt = timezone.now()
+        assigned_at_dt = _combine_date_with_now_time(assigned_on, now_dt)
+
         assignment = form.save(commit=False)
-        assignment.company_id = request.session.get("active_company_id")
+        assignment.company = company
         assignment.staffing_plan_item = item
-        assignment.assigned_at = assigned_on
+        assignment.assigned_at = assigned_at_dt
         assignment.save()
 
         messages.success(request, f"{person} assigned successfully.")
-
         return redirect("staff:assignments")
 
 
@@ -1435,11 +1476,7 @@ class AssignmentReleaseAllView(LoginRequiredMixin, ActiveCompanyMixin, View):
             messages.error(request, "Active company is not selected.")
             return redirect("staff:assignments")
 
-        plan = (
-            StaffingPlan.objects.filter(company=company, is_active=True)
-            .order_by("-updated_at")
-            .first()
-        )
+        plan = _get_active_plan(company)
         if plan is None:
             messages.error(request, "No active staffing plan found.")
             return redirect("staff:assignments")
