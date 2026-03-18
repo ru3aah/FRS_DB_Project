@@ -4,8 +4,6 @@
 {% block content %}
 {% include "includes/navbar.html" %}
 
-<script src="https://unpkg.com/htmx.org@1.9.12"></script>
-
 <div class="container mt-4">
   <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
     <div class="d-flex gap-2 flex-wrap">
@@ -57,6 +55,7 @@
                 {% for row in rows %}
                   {% with item=row.item %}
                   <tr>
+
                     <td class="fw-semibold text-center">
                       {{ item.position.name_long }}
                     </td>
@@ -81,7 +80,7 @@
                       {% if item.assignments.all %}
                         <ul class="list-group list-group-flush">
                           {% for a in item.assignments.all %}
-                            <li class="list-group-item d-flex justify-content-between align-items-center gap-2">
+                              <li class="list-group-item d-flex justify-content-between align-items-center">
                               <span>
                                 <div>{{ a.person }}</div>
                                 <div class="small text-muted">
@@ -91,36 +90,21 @@
                                   {% else %}
                                     —
                                   {% endif %}
-                                  {% if a.released_at %}
-                                    | Released: {{ a.released_at|date:"SHORT_DATE_FORMAT" }}
-                                  {% endif %}
                                 </div>
                               </span>
 
-                              <div class="d-flex gap-2">
-                                {% if a.is_active %}
                                   <form method="post"
-                                        action="{% url 'staff:assignment_release' a.pk %}">
-                                    {% csrf_token %}
-                                    <input type="hidden" name="released_on" value="">
-                                    <button class="btn btn-sm btn-outline-danger"
-                                            type="submit"
-                                            onclick="return askReleaseDate(this);">
-                                      Release
-                                    </button>
+                                        action="{% url 'staff:assignment_release' a.pk %}"
+                                        class="ms-2">
+                                      {% csrf_token %}
+                                      <input type="hidden" name="released_on"
+                                             value="">
+                                      <button class="btn btn-sm btn-outline-danger"
+                                              type="submit"
+                                              onclick="return askReleaseDate(this);">
+                                          Release
+                                      </button>
                                   </form>
-                                {% else %}
-                                  <form method="post"
-                                        action="{% url 'staff:assignment_delete' a.pk %}">
-                                    {% csrf_token %}
-                                    <button class="btn btn-sm btn-outline-dark"
-                                            type="submit"
-                                            onclick="return confirm('Delete this closed assignment permanently? This action cannot be undone.');">
-                                      Delete
-                                    </button>
-                                  </form>
-                                {% endif %}
-                              </div>
                             </li>
                           {% endfor %}
                         </ul>
@@ -130,21 +114,12 @@
                     </td>
 
                     <td class="text-center">
-                      {% if plan.is_active and item.vacant > 0 %}
-                        <button
-                          type="button"
-                          class="btn btn-primary btn-sm"
-                          hx-get="{% url 'staff:assignment_modal' item.pk %}"
-                          hx-target="#assignment-modal-body"
-                          hx-swap="innerHTML"
-                          data-bs-toggle="modal"
-                          data-bs-target="#assignmentModal">
-                          Assign
-                        </button>
-                      {% else %}
-                        <span class="text-muted small">—</span>
-                      {% endif %}
+                        <a class="btn btn-primary btn-sm"
+                           href="{% url 'staff:assignment_add' item.pk %}">
+                            Assign
+                        </a>
                     </td>
+
                   </tr>
                   {% endwith %}
                 {% empty %}
@@ -158,23 +133,10 @@
             </table>
           </div>
         </div>
+
       </div>
     {% endif %}
   {% endif %}
-</div>
-
-<div class="modal fade" id="assignmentModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title">Assign person</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-      </div>
-      <div class="modal-body" id="assignment-modal-body">
-        <div class="text-center text-muted py-3">Loading…</div>
-      </div>
-    </div>
-  </div>
 </div>
 
 <script>
@@ -211,15 +173,6 @@
     if (input) input.value = (val || "").trim();
     return confirm("Release all active assignments of the current active plan?");
   }
-
-  document.addEventListener("hidden.bs.modal", function (event) {
-    if (event.target && event.target.id === "assignmentModal") {
-      const body = document.getElementById("assignment-modal-body");
-      if (body) {
-        body.innerHTML = '<div class="text-center text-muted py-3">Loading…</div>';
-      }
-    }
-  });
 </script>
 
 {% endblock %}

@@ -3,10 +3,6 @@ from django.views.generic import RedirectView
 
 from .views import (
     AssignmentCreateView,
-    AssignmentDeleteFutureView,
-    AssignmentDeleteView,
-    AssignmentModalView,
-    AssignmentPersonOptionsView,
     AssignmentReleaseAllView,
     AssignmentReleaseView,
     AssignmentsView,
@@ -116,16 +112,6 @@ urlpatterns = [
     ),
     path("assignments/", AssignmentsView.as_view(), name="assignments"),
     path(
-        "assignments/item/<int:item_pk>/modal/",
-        AssignmentModalView.as_view(),
-        name="assignment_modal",
-    ),
-    path(
-        "assignments/item/<int:item_pk>/person-options/",
-        AssignmentPersonOptionsView.as_view(),
-        name="assignment_person_options",
-    ),
-    path(
         "assignments/item/<int:item_pk>/assign/",
         AssignmentCreateView.as_view(),
         name="assignment_add",
@@ -134,16 +120,6 @@ urlpatterns = [
         "assignments/<int:assignment_pk>/release/",
         AssignmentReleaseView.as_view(),
         name="assignment_release",
-    ),
-    path(
-        "assignments/<int:assignment_pk>/delete/",
-        AssignmentDeleteView.as_view(),
-        name="assignment_delete",
-    ),
-    path(
-        "assignments/<int:assignment_pk>/delete-future/",
-        AssignmentDeleteFutureView.as_view(),
-        name="assignment_delete_future",
     ),
     path(
         "assignments/release-all/",

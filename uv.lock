@@ -110,6 +110,7 @@ dependencies = [
     { name = "psycopg", extra = ["binary"] },
     { name = "pycountry" },
     { name = "python-dotenv" },
+    { name = "ruff" },
 ]
 
 [package.dev-dependencies]
@@ -130,6 +131,7 @@ requires-dist = [
     { name = "psycopg", extras = ["binary"], specifier = ">=3.3.2" },
     { name = "pycountry", specifier = ">=24.6.1" },
     { name = "python-dotenv", specifier = ">=1.2.1" },
+    { name = "ruff", specifier = ">=0.14.14" },
 ]
 
 [package.metadata.requires-dev]

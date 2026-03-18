@@ -4,22 +4,20 @@ from datetime import date, timedelta
 
 from django import forms
 from django.core.exceptions import ValidationError
-from django.db.models import Q
 from django.forms import inlineformset_factory
-from django.utils import timezone
 
 from persons.models import Person
 
 from .models import (
     Position,
-    RosterOverride,
-    Shift,
-    ShiftMembership,
     ShiftType,
-    StaffAbsence,
-    StaffingAssignment,
+    Shift,
     StaffingPlan,
     StaffingPlanItem,
+    StaffingAssignment,
+    ShiftMembership,
+    StaffAbsence,
+    RosterOverride,
 )
 
 
@@ -115,12 +113,6 @@ def evaluate_shift_pattern(
             )
 
     return result
-
-
-def _assignment_conflict_q(target_date: date) -> Q:
-    return Q(assigned_at__date__lte=target_date) & (
-        Q(released_at__isnull=True) | Q(released_at__date__gte=target_date)
-    )
 
 
 class PersonAssignmentChoiceField(forms.ModelChoiceField):
@@ -346,48 +338,11 @@ class ShiftPackageCreateForm(forms.Form):
 class StaffingPlanForm(forms.ModelForm):
     class Meta:
         model = StaffingPlan
-        fields = ["staffing_plan_name", "active_from", "active_to", "is_active"]
+        fields = ["staffing_plan_name", "is_active"]
         widgets = {
             "staffing_plan_name": forms.TextInput(attrs={"class": "form-control"}),
-            "active_from": forms.DateInput(
-                attrs={"type": "date", "class": "form-control"}
-            ),
-            "active_to": forms.DateInput(
-                attrs={"type": "date", "class": "form-control"}
-            ),
             "is_active": forms.CheckboxInput(attrs={"class": "form-check-input"}),
         }
-
-    def clean(self):
-        cleaned = super().clean()
-        active_from = cleaned.get("active_from")
-        active_to = cleaned.get("active_to")
-        is_active = bool(cleaned.get("is_active"))
-        today = timezone.localdate()
-
-        if not active_from:
-            self.add_error("active_from", "Active from is required.")
-
-        if active_from and active_to and active_to < active_from:
-            self.add_error(
-                "active_to",
-                "Active to cannot be earlier than active from.",
-            )
-
-        if is_active and active_from:
-            if today < active_from:
-                self.add_error(
-                    "is_active",
-                    "Plan cannot be active before its active from date.",
-                )
-
-            if active_to and today > active_to:
-                self.add_error(
-                    "is_active",
-                    "Plan cannot be active after its active to date.",
-                )
-
-        return cleaned
 
 
 class StaffingPlanItemForm(forms.ModelForm):
@@ -420,7 +375,7 @@ class AssignmentCreateForm(forms.Form):
     )
 
     assigned_on = forms.DateField(
-        required=False,
+        required=True,
         initial=date.today,
         widget=forms.DateInput(attrs={"type": "date", "class": "form-control"}),
         label="Assigned on",
@@ -433,50 +388,22 @@ class AssignmentCreateForm(forms.Form):
         self.company = company
         self.item = item
 
-        assigned_on = None
-        raw_assigned_on = None
-
-        if self.is_bound:
-            raw_assigned_on = self.data.get(
-                self.add_prefix("assigned_on")
-            ) or self.data.get("assigned_on")
-        else:
-            raw_assigned_on = self.initial.get("assigned_on")
-
-        if raw_assigned_on:
-            try:
-                assigned_on = date.fromisoformat(str(raw_assigned_on))
-            except (TypeError, ValueError):
-                assigned_on = None
-
-        if assigned_on is None:
-            assigned_on = date.today()
-
         qs = Person.objects.all()
+        if self.company is not None:
+            qs = qs.filter(company=self.company)
 
-        company_id = getattr(self.company, "id", self.company)
-        if company_id is not None:
-            qs = qs.filter(company_id=company_id)
-
-        busy_person_ids = StaffingAssignment.objects.filter(
-            _assignment_conflict_q(assigned_on)
-        ).values_list("person_id", flat=True)
-
-        self.fields["person"].queryset = qs.exclude(
-            person_id__in=busy_person_ids
-        ).order_by("person_id", "family_name", "first_name", "second_name")
+        self.fields["person"].queryset = qs.order_by(
+            "person_id", "family_name", "first_name", "second_name"
+        )
 
     def clean(self):
         cleaned = super().clean()
         person: Person | None = cleaned.get("person")
-        assigned_on: date = cleaned.get("assigned_on") or date.today()
 
         if self.company is None or self.item is None or person is None:
             return cleaned
 
-        company_id = getattr(self.company, "id", self.company)
-
-        if person.company_id != company_id:
+        if person.company_id != self.company.id:
             raise ValidationError(
                 "You can assign only persons created under the active company."
             )
@@ -490,43 +417,21 @@ class AssignmentCreateForm(forms.Form):
                     f"This position requires {required_status} staff."
                 )
 
-        occupied = StaffingAssignment.objects.filter(
-            staffing_plan_item=self.item,
-            is_active=True,
-        ).count()
-        if occupied >= self.item.position_qty:
-            raise ValidationError("No vacant slots for this position.")
-
-        if (
-            StaffingAssignment.objects.filter(person=person)
-            .filter(_assignment_conflict_q(assigned_on))
-            .exists()
-        ):
-            raise ValidationError(
-                "This person is already assigned on the selected date."
-            )
-
         return cleaned
 
-    def save(self, commit: bool = True) -> StaffingAssignment:
+    def save(self) -> StaffingAssignment:
         if self.company is None or self.item is None:
             raise ValueError("company and item are required")
 
         person: Person = self.cleaned_data["person"]
-        company_id = getattr(self.company, "id", self.company)
 
-        assignment = StaffingAssignment(
+        return StaffingAssignment.objects.create(
             staffing_plan_item=self.item,
             person=person,
-            company_id=company_id,
+            company=self.company,
             is_active=True,
             released_at=None,
         )
-
-        if commit:
-            assignment.save()
-
-        return assignment
 
 
 class ShiftMembershipForm(forms.ModelForm):
