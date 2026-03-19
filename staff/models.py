@@ -440,7 +440,7 @@ class StaffingAssignment(models.Model):
 
     is_active = models.BooleanField(default=True)
 
-    assigned_at = models.DateTimeField(auto_now_add=True)
+    assigned_at = models.DateTimeField()
     released_at = models.DateTimeField(blank=True, null=True)
 
     class Meta:

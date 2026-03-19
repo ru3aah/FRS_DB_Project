@@ -63,6 +63,101 @@
                         </button>
                     </div>
                 </form>
+
+                {% if current_conflicts %}
+                    <hr class="my-4">
+
+                    <div class="alert alert-warning">
+                        Selected person already has assignment(s) on the chosen
+                        date.
+                        Release the conflicting assignment first, then try
+                        assigning again.
+                    </div>
+
+                    {% if selected_person %}
+                        <div class="mb-3">
+                            <label class="form-label">Selected person</label>
+                            <input type="text" class="form-control"
+                                   value="{{ selected_person }}" readonly>
+                        </div>
+                    {% endif %}
+
+                    <div class="table-responsive mb-3">
+                        <table class="table table-bordered table-sm align-middle">
+                            <thead class="table-light text-center">
+                            <tr>
+                                <th>From</th>
+                                <th>To</th>
+                                <th>Position</th>
+                                <th>Plan</th>
+                                <th>Status</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            {% for a in current_conflicts %}
+                                <tr>
+                                    <td class="text-center">{{ a.assigned_at|date:"SHORT_DATE_FORMAT" }}</td>
+                                    <td class="text-center">
+                                        {% if a.released_at %}
+                                            {{ a.released_at|date:"SHORT_DATE_FORMAT" }}
+                                        {% else %}
+                                            —
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ a.staffing_plan_item.position.name_long }}</td>
+                                    <td>{{ a.staffing_plan_item.staffing_plan.staffing_plan_name }}</td>
+                                    <td class="text-center">
+                                        {% if a.is_active %}
+                                            <span class="badge bg-success">Active</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">Inactive</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="alert alert-secondary">
+                        Release the conflicting assignment first.
+                        If release date equals assignment start date, that
+                        assignment record should be removed.
+                    </div>
+
+                    {% for a in current_conflicts %}
+                        <form method="post"
+                              action="{% url 'staff:assignment_release' a.pk %}"
+                              class="border rounded p-3 mb-3">
+                            {% csrf_token %}
+                            <input type="hidden" name="next"
+                                   value="{{ return_url }}">
+
+                            <div class="mb-2 fw-semibold">
+                                Release conflict: {{ a.person }}
+                                → {{ a.staffing_plan_item.position.name_long }}
+                            </div>
+
+                            <div class="row g-2 align-items-end">
+                                <div class="col-md-4">
+                                    <label class="form-label">Release
+                                        date</label>
+                                    <input type="date"
+                                           name="released_on"
+                                           value="{{ form.assigned_on.value|default:'' }}"
+                                           class="form-control">
+                                </div>
+
+                                <div class="col-md-8">
+                                    <button type="submit"
+                                            class="btn btn-outline-danger">
+                                        Release this assignment
+                                    </button>
+                                </div>
+                            </div>
+                        </form>
+                    {% endfor %}
+                {% endif %}
             </div>
         </div>
     </div>

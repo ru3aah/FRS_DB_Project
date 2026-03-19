@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from calendar import monthrange
 from datetime import date, datetime, timedelta
+from urllib.parse import urlencode
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -280,22 +281,36 @@ def _parse_date_from_post(value: str | None):
         return None
 
 
-def _combine_date_with_now_time(chosen_date, now_dt):
+def _combine_date_as_day_start(chosen_date):
     if chosen_date is None:
-        chosen_date = now_dt.date()
+        chosen_date = timezone.localdate()
 
     dt = datetime(
         year=chosen_date.year,
         month=chosen_date.month,
         day=chosen_date.day,
-        hour=now_dt.hour,
-        minute=now_dt.minute,
-        second=now_dt.second,
-        microsecond=now_dt.microsecond,
+        hour=0,
+        minute=0,
+        second=0,
+        microsecond=0,
     )
-    if timezone.is_aware(now_dt):
-        return timezone.make_aware(dt, timezone.get_current_timezone())
-    return dt
+    return timezone.make_aware(dt, timezone.get_current_timezone())
+
+
+def _combine_date_as_day_end(chosen_date):
+    if chosen_date is None:
+        chosen_date = timezone.localdate()
+
+    dt = datetime(
+        year=chosen_date.year,
+        month=chosen_date.month,
+        day=chosen_date.day,
+        hour=23,
+        minute=59,
+        second=59,
+        microsecond=999999,
+    )
+    return timezone.make_aware(dt, timezone.get_current_timezone())
 
 
 def _get_month_start_end(month_str: str | None) -> tuple[date, date]:
@@ -1149,6 +1164,24 @@ class StaffingPlanDeactivateView(LoginRequiredMixin, ActiveCompanyMixin, View):
 class AssignmentsView(LoginRequiredMixin, ActiveCompanyMixin, TemplateView):
     template_name = "staff/assignments.html"
 
+    def _get_assignment_status(
+        self, assignment: StaffingAssignment, ref_day: date
+    ) -> str:
+        start_day = assignment.assigned_at.date()
+
+        if assignment.released_at is None:
+            end_day = None
+        else:
+            end_day = assignment.released_at.date()
+
+        if start_day > ref_day:
+            return "Future"
+
+        if end_day is not None and end_day < ref_day:
+            return "Closed"
+
+        return "Active"
+
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         company = self.get_active_company()
@@ -1157,7 +1190,11 @@ class AssignmentsView(LoginRequiredMixin, ActiveCompanyMixin, TemplateView):
         if company is None:
             ctx["plan"] = None
             ctx["rows"] = []
+            ctx["reference_date"] = timezone.localdate()
             return ctx
+
+        reference_date = timezone.localdate()
+        ctx["reference_date"] = reference_date
 
         plan = (
             StaffingPlan.objects.filter(company=company, is_active=True)
@@ -1173,77 +1210,72 @@ class AssignmentsView(LoginRequiredMixin, ActiveCompanyMixin, TemplateView):
             ctx["rows"] = []
             return ctx
 
-        active_assignments_qs = StaffingAssignment.objects.filter(
-            is_active=True
-        ).select_related("person")
+        all_assignments_qs = StaffingAssignment.objects.select_related(
+            "person"
+        ).order_by("assigned_at", "pk")
 
         items_qs = (
             StaffingPlanItem.objects.filter(staffing_plan=plan)
             .select_related("position")
-            .annotate(
-                occupied=Count("assignments", filter=Q(assignments__is_active=True))
-            )
-            .prefetch_related(Prefetch("assignments", queryset=active_assignments_qs))
+            .prefetch_related(Prefetch("assignments", queryset=all_assignments_qs))
             .order_by("position__name_long")
         )
 
-        items = []
-        today_str = date.today().isoformat()
-        for it in items_qs:
-            it.vacant = max(0, int(it.position_qty) - int(it.occupied or 0))
-            items.append(it)
+        rows = []
+        for item in items_qs:
+            visible_assignments = []
+            occupied = 0
 
-        ctx["items"] = items
-        ctx["rows"] = [
-            {
-                "item": it,
-                "form": AssignmentCreateForm(
-                    company=company,
-                    item=it,
-                    initial={"assigned_on": today_str},
-                ),
-            }
-            for it in items
-        ]
+            for assignment in item.assignments.all():
+                status = self._get_assignment_status(assignment, reference_date)
+
+                # на этом экране показываем только текущие и будущие
+                if status == "Closed":
+                    continue
+
+                assignment.derived_status = status
+                visible_assignments.append(assignment)
+
+                if status == "Active":
+                    occupied += 1
+
+            item.occupied = occupied
+            item.vacant = max(0, int(item.position_qty) - int(occupied))
+
+            rows.append(
+                {
+                    "item": item,
+                    "assignments": visible_assignments,
+                }
+            )
+
+        ctx["rows"] = rows
         return ctx
-
-
-class AssignmentPersonOptionsView(LoginRequiredMixin, ActiveCompanyMixin, View):
-    def post(self, request: HttpRequest, item_pk: int) -> HttpResponse:
-        company = self.get_active_company()
-        if company is None:
-            return HttpResponse("")
-
-        item = get_object_or_404(
-            StaffingPlanItem.objects.select_related("staffing_plan"),
-            pk=item_pk,
-            staffing_plan__company=company,
-        )
-
-        assigned_on = (
-            request.POST.get("assigned_on")
-            or request.POST.get(f"assigned_on_{item_pk}")
-            or date.today().isoformat()
-        )
-
-        form = AssignmentCreateForm(
-            company=company,
-            item=item,
-            initial={"assigned_on": assigned_on},
-        )
-
-        return render(
-            request,
-            "staff/includes/assignment_person_select.html",
-            {
-                "form": form,
-                "item": item,
-            },
-        )
 
 
 class AssignmentCreateView(LoginRequiredMixin, ActiveCompanyMixin, View):
     template_name = "staff/assignment_form.html"
+
+    def _build_return_url(
+        self,
+        *,
+        item_pk: int,
+        assigned_on: str | None,
+        released_on: str | None,
+        person_id: str | None,
+    ) -> str:
+        base_url = reverse("staff:assignment_add", kwargs={"item_pk": item_pk})
+        params = {}
+        if assigned_on:
+            params["assigned_on"] = assigned_on
+        if released_on:
+            params["released_on"] = released_on
+        if person_id:
+            params["person"] = person_id
+
+        if params:
+            return f"{base_url}?{urlencode(params)}"
+        return base_url
 
     def get(self, request: HttpRequest, item_pk: int) -> HttpResponse:
         company = self.get_active_company()
@@ -1257,10 +1289,18 @@ class AssignmentCreateView(LoginRequiredMixin, ActiveCompanyMixin, View):
             staffing_plan__company=company,
         )
 
+        initial = {
+            "assigned_on": request.GET.get("assigned_on") or date.today().isoformat(),
+            "released_on": request.GET.get("released_on") or "",
+        }
+        person_raw = (request.GET.get("person") or "").strip()
+        if person_raw.isdigit():
+            initial["person"] = int(person_raw)
+
         form = AssignmentCreateForm(
             company=company,
             item=item,
-            initial={"assigned_on": date.today().isoformat()},
+            initial=initial,
         )
 
         return render(
@@ -1270,6 +1310,14 @@ class AssignmentCreateView(LoginRequiredMixin, ActiveCompanyMixin, View):
                 "active_company": company,
                 "item": item,
                 "form": form,
+                "interval_conflicts": [],
+                "selected_person": None,
+                "return_url": self._build_return_url(
+                    item_pk=item.pk,
+                    assigned_on=str(initial.get("assigned_on") or ""),
+                    released_on=str(initial.get("released_on") or ""),
+                    person_id=person_raw,
+                ),
             },
         )
 
@@ -1291,6 +1339,17 @@ class AssignmentCreateView(LoginRequiredMixin, ActiveCompanyMixin, View):
             item=item,
         )
 
+        selected_person = None
+        person_raw = (request.POST.get("person") or "").strip()
+        if person_raw.isdigit():
+            selected_person = Person.objects.filter(
+                pk=int(person_raw),
+                company=company,
+            ).first()
+
+        assigned_on_raw = (request.POST.get("assigned_on") or "").strip()
+        released_on_raw = (request.POST.get("released_on") or "").strip()
+
         if not form.is_valid():
             return render(
                 request,
@@ -1299,24 +1358,42 @@ class AssignmentCreateView(LoginRequiredMixin, ActiveCompanyMixin, View):
                     "active_company": company,
                     "item": item,
                     "form": form,
+                    "selected_person": selected_person,
+                    "interval_conflicts": getattr(form, "interval_conflicts", []),
+                    "return_url": self._build_return_url(
+                        item_pk=item.pk,
+                        assigned_on=assigned_on_raw,
+                        released_on=released_on_raw,
+                        person_id=person_raw,
+                    ),
                 },
             )
 
         assigned_on = form.cleaned_data.get("assigned_on")
-        now_dt = timezone.now()
+        released_on = form.cleaned_data.get("released_on")
+
         assigned_at_dt = (
-            _combine_date_with_now_time(assigned_on, now_dt) if assigned_on else now_dt
+            _combine_date_as_day_start(assigned_on) if assigned_on else timezone.now()
         )
+        released_at_dt = _combine_date_as_day_end(released_on) if released_on else None
 
         try:
             with transaction.atomic():
-                assignment = form.save()
+                # нулевой интервал не создаём
+                if assigned_on and released_on and assigned_on == released_on:
+                    messages.warning(
+                        request,
+                        "Assignment with same start and end date is ignored (zero-length).",
+                    )
+                    return redirect("staff:assignments")
+
+                assignment = form.save(commit=False)
                 assignment.assigned_at = assigned_at_dt
-                assignment.released_at = None
-                assignment.is_active = True
-                assignment.save(
-                    update_fields=["assigned_at", "released_at", "is_active"]
+                assignment.released_at = released_at_dt
+                assignment.is_active = (
+                    True  # пока временно, позже переведём на расчёт по интервалу
                 )
+                assignment.save()
         except IntegrityError:
             messages.error(request, "Failed to create assignment.")
             return render(
@@ -1326,6 +1403,33 @@ class AssignmentCreateView(LoginRequiredMixin, ActiveCompanyMixin, View):
                     "active_company": company,
                     "item": item,
                     "form": form,
+                    "selected_person": selected_person,
+                    "interval_conflicts": getattr(form, "interval_conflicts", []),
+                    "return_url": self._build_return_url(
+                        item_pk=item.pk,
+                        assigned_on=assigned_on_raw,
+                        released_on=released_on_raw,
+                        person_id=person_raw,
+                    ),
+                },
+            )
+        except ValidationError as e:
+            form.add_error(None, e)
+            return render(
+                request,
+                self.template_name,
+                {
+                    "active_company": company,
+                    "item": item,
+                    "form": form,
+                    "selected_person": selected_person,
+                    "interval_conflicts": getattr(form, "interval_conflicts", []),
+                    "return_url": self._build_return_url(
+                        item_pk=item.pk,
+                        assigned_on=assigned_on_raw,
+                        released_on=released_on_raw,
+                        person_id=person_raw,
+                    ),
                 },
             )
 
@@ -1340,15 +1444,18 @@ class AssignmentReleaseView(LoginRequiredMixin, ActiveCompanyMixin, View):
             messages.error(request, "Active company is not selected.")
             return redirect("staff:assignments")
 
-        a = get_object_or_404(StaffingAssignment, pk=assignment_pk, company=company)
-
-        released_on = _parse_date_from_post(request.POST.get("released_on"))
-        now_dt = timezone.now()
-        released_at_dt = (
-            _combine_date_with_now_time(released_on, now_dt) if released_on else now_dt
+        assignment = get_object_or_404(
+            StaffingAssignment,
+            pk=assignment_pk,
+            company=company,
         )
 
-        assigned_date = _dt_to_local_date(a.assigned_at)
+        released_on = _parse_date_from_post(request.POST.get("released_on"))
+        released_at_dt = (
+            _combine_date_as_day_end(released_on) if released_on else timezone.now()
+        )
+
+        assigned_date = _dt_to_local_date(assignment.assigned_at)
         release_date = _dt_to_local_date(released_at_dt)
 
         if assigned_date and release_date and release_date < assigned_date:
@@ -1356,17 +1463,26 @@ class AssignmentReleaseView(LoginRequiredMixin, ActiveCompanyMixin, View):
                 request,
                 "Release date cannot be earlier than assignment date.",
             )
-            return redirect("staff:assignments")
+            next_url = (request.POST.get("next") or "").strip()
+            return redirect(next_url or "staff:assignments")
 
-        if a.is_active:
-            a.is_active = False
-            a.released_at = released_at_dt
-            a.save(update_fields=["is_active", "released_at"])
-            messages.success(request, "Released.")
-        else:
-            messages.info(request, "Already inactive.")
+        # если assign и release в один календарный день — запись удаляем
+        if assigned_date and release_date and release_date == assigned_date:
+            assignment.delete()
+            messages.success(
+                request,
+                "Assignment was removed because assign and release dates are the same.",
+            )
+            next_url = (request.POST.get("next") or "").strip()
+            return redirect(next_url or "staff:assignments")
 
-        return redirect("staff:assignments")
+        assignment.released_at = released_at_dt
+        assignment.is_active = False
+        assignment.save(update_fields=["released_at", "is_active"])
+        messages.success(request, "Released.")
+
+        next_url = (request.POST.get("next") or "").strip()
+        return redirect(next_url or "staff:assignments")
 
 
 class AssignmentReleaseAllView(LoginRequiredMixin, ActiveCompanyMixin, View):

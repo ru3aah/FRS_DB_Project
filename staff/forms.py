@@ -10,14 +10,14 @@ from persons.models import Person
 
 from .models import (
     Position,
-    ShiftType,
+    RosterOverride,
     Shift,
+    ShiftMembership,
+    ShiftType,
+    StaffAbsence,
+    StaffingAssignment,
     StaffingPlan,
     StaffingPlanItem,
-    StaffingAssignment,
-    ShiftMembership,
-    StaffAbsence,
-    RosterOverride,
 )
 
 
@@ -381,12 +381,19 @@ class AssignmentCreateForm(forms.Form):
         label="Assigned on",
     )
 
+    released_on = forms.DateField(
+        required=False,
+        widget=forms.DateInput(attrs={"type": "date", "class": "form-control"}),
+        label="Release on",
+    )
+
     def __init__(
         self, *args, company=None, item: StaffingPlanItem | None = None, **kwargs
     ):
         super().__init__(*args, **kwargs)
         self.company = company
         self.item = item
+        self.interval_conflicts: list[StaffingAssignment] = []
 
         qs = Person.objects.all()
         if self.company is not None:
@@ -396,11 +403,67 @@ class AssignmentCreateForm(forms.Form):
             "person_id", "family_name", "first_name", "second_name"
         )
 
+    def _intervals_overlap(
+        self,
+        start1: date,
+        end1: date | None,
+        start2: date,
+        end2: date | None,
+    ) -> bool:
+        left_end = end1 or date.max
+        right_end = end2 or date.max
+        return start1 <= right_end and start2 <= left_end
+
+    def _get_assignment_interval(
+        self,
+        assignment: StaffingAssignment,
+    ) -> tuple[date, date | None]:
+        start = assignment.assigned_at.date()
+        end = assignment.released_at.date() if assignment.released_at else None
+        return start, end
+
+    def get_interval_conflicts(
+        self,
+        *,
+        person: Person,
+        start: date,
+        end: date | None,
+    ) -> list[StaffingAssignment]:
+        qs = (
+            StaffingAssignment.objects.filter(person=person)
+            .select_related(
+                "staffing_plan_item__position",
+                "staffing_plan_item__staffing_plan",
+            )
+            .order_by("assigned_at", "pk")
+        )
+
+        conflicts: list[StaffingAssignment] = []
+        for assignment in qs:
+            a_start, a_end = self._get_assignment_interval(assignment)
+            if self._intervals_overlap(start, end, a_start, a_end):
+                conflicts.append(assignment)
+
+        return conflicts
+
     def clean(self):
         cleaned = super().clean()
         person: Person | None = cleaned.get("person")
+        assigned_on: date | None = cleaned.get("assigned_on")
+        released_on: date | None = cleaned.get("released_on")
 
-        if self.company is None or self.item is None or person is None:
+        if assigned_on and released_on and released_on < assigned_on:
+            self.add_error(
+                "released_on",
+                "Release date cannot be earlier than assignment date.",
+            )
+
+        if (
+            self.company is None
+            or self.item is None
+            or person is None
+            or assigned_on is None
+        ):
             return cleaned
 
         if person.company_id != self.company.id:
@@ -417,21 +480,37 @@ class AssignmentCreateForm(forms.Form):
                     f"This position requires {required_status} staff."
                 )
 
+        self.interval_conflicts = self.get_interval_conflicts(
+            person=person,
+            start=assigned_on,
+            end=released_on,
+        )
+
+        if self.interval_conflicts:
+            raise ValidationError(
+                "This person already has assignment(s) overlapping with the selected period."
+            )
+
         return cleaned
 
-    def save(self) -> StaffingAssignment:
+    def save(self, commit: bool = True) -> StaffingAssignment:
         if self.company is None or self.item is None:
             raise ValueError("company and item are required")
 
         person: Person = self.cleaned_data["person"]
 
-        return StaffingAssignment.objects.create(
+        assignment = StaffingAssignment(
             staffing_plan_item=self.item,
             person=person,
             company=self.company,
             is_active=True,
             released_at=None,
         )
+
+        if commit:
+            assignment.save()
+
+        return assignment
 
 
 class ShiftMembershipForm(forms.ModelForm):
