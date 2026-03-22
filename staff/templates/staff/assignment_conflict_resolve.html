@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+{% block title %}FRS DB | Resolve assignment conflict{% endblock %}
+
+{% block content %}
+    {% include "includes/navbar.html" %}
+
+    <div class="container mt-4">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+            <div class="d-flex gap-2 flex-wrap">
+                <a class="btn btn-outline-secondary"
+                   href="{% url 'staff:assignments' %}">Back to assignments</a>
+                <a class="btn btn-outline-secondary"
+                   href="{% url 'staff:index' %}">Staff menu</a>
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-header">
+                <strong>Resolve assignment conflict</strong>
+            </div>
+            <div class="card-body">
+
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <div class="border rounded p-3 h-100">
+                            <div class="fw-semibold mb-2">New assignment</div>
+
+                            <div><strong>Person:</strong>
+                                {% if selected_person %}
+                                    {{ selected_person }}{% else %}—{% endif %}
+                            </div>
+                            <div>
+                                <strong>Position:</strong> {{ new_item.position.name_long }}
+                            </div>
+                            <div>
+                                <strong>Plan:</strong> {{ new_item.staffing_plan.staffing_plan_name }}
+                            </div>
+                            <div><strong>From:</strong>
+                                {% if assigned_on %}
+                                    {{ assigned_on|date:"SHORT_DATE_FORMAT" }}{% else %}
+                                    —{% endif %}
+                            </div>
+                            <div><strong>To:</strong>
+                                {% if released_on %}
+                                    {{ released_on|date:"SHORT_DATE_FORMAT" }}{% else %}
+                                    —{% endif %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-md-6">
+                        <div class="border rounded p-3 h-100">
+                            <div class="fw-semibold mb-2">Existing conflicting
+                                assignment
+                            </div>
+
+                            <div>
+                                <strong>Person:</strong> {{ conflict_assignment.person }}
+                            </div>
+                            <div>
+                                <strong>Position:</strong> {{ conflict_assignment.staffing_plan_item.position.name_long }}
+                            </div>
+                            <div>
+                                <strong>Plan:</strong> {{ conflict_assignment.staffing_plan_item.staffing_plan.staffing_plan_name }}
+                            </div>
+                            <div>
+                                <strong>From:</strong> {{ conflict_assignment.assigned_at|date:"SHORT_DATE_FORMAT" }}
+                            </div>
+                            <div><strong>To:</strong>
+                                {% if conflict_assignment.released_at %}
+                                    {{ conflict_assignment.released_at|date:"SHORT_DATE_FORMAT" }}
+                                {% else %}
+                                    —
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <hr class="my-4">
+
+                <form method="post">
+                    {% csrf_token %}
+
+                    <input type="hidden" name="item_pk"
+                           value="{{ new_item.pk }}">
+                    <input type="hidden" name="person" value="
+                            {% if selected_person %}{{ selected_person.pk }}{% endif %}">
+                    <input type="hidden" name="assigned_on"
+                           value="{{ assigned_on_raw }}">
+                    <input type="hidden" name="released_on"
+                           value="{{ released_on_raw }}">
+
+                    <div class="mb-3">
+                        <label class="form-label">Resolution</label>
+                        <select name="resolution" class="form-select" required>
+                            <option value="">Select action…</option>
+                            <option value="trim_create">Trim existing and create
+                                new
+                            </option>
+                            <option value="delete_create">Delete existing and
+                                create new
+                            </option>
+                            <option value="keep_existing">Keep existing, do not
+                                create new
+                            </option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Trim existing assignment
+                            to</label>
+                        <input type="date"
+                               name="trim_to"
+                               class="form-control"
+                               value="
+                                       {% if default_trim_date %}{{ default_trim_date|date:'Y-m-d' }}{% endif %}">
+                        <div class="form-text">
+                            Used only for “Trim existing and create new”.
+                        </div>
+                    </div>
+
+                    <div class="alert alert-secondary">
+                        <div><strong>Trim existing and create new</strong> —
+                            existing assignment will end on selected trim date,
+                            then new assignment will be created.
+                        </div>
+                        <div><strong>Delete existing and create new</strong> —
+                            existing assignment will be deleted completely, then
+                            new assignment will be created.
+                        </div>
+                        <div><strong>Keep existing, do not create new</strong> —
+                            no changes will be made.
+                        </div>
+                    </div>
+
+                    <div class="d-flex justify-content-end gap-2">
+                        <a class="btn btn-outline-secondary"
+                           href="{% url 'staff:assignments' %}">
+                            Cancel
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            Apply resolution
+                        </button>
+                    </div>
+                </form>
+
+            </div>
+        </div>
+    </div>
+{% endblock %}

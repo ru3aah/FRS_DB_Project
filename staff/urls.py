@@ -2,6 +2,7 @@ from django.urls import path, reverse_lazy
 from django.views.generic import RedirectView
 
 from .views import (
+    AssignmentConflictResolveView,
     AssignmentCreateView,
     AssignmentReleaseAllView,
     AssignmentReleaseView,
@@ -125,5 +126,10 @@ urlpatterns = [
         "assignments/release-all/",
         AssignmentReleaseAllView.as_view(),
         name="assignment_release_all",
+    ),
+    path(
+        "assignments/conflicts/<int:assignment_pk>/resolve/",
+        AssignmentConflictResolveView.as_view(),
+        name="assignment_conflict_resolve",
     ),
 ]

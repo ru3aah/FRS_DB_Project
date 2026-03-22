@@ -77,40 +77,56 @@
                     </td>
 
                     <td>
-                      {% if item.assignments.all %}
-                        <ul class="list-group list-group-flush">
-                          {% for a in item.assignments.all %}
-                              <li class="list-group-item d-flex justify-content-between align-items-center">
-                              <span>
-                                <div>{{ a.person }}</div>
-                                <div class="small text-muted">
-                                  Assigned:
-                                  {% if a.assigned_at %}
-                                    {{ a.assigned_at|date:"SHORT_DATE_FORMAT" }}
-                                  {% else %}
-                                    —
-                                  {% endif %}
-                                </div>
-                              </span>
+                        {% if row.assignments %}
+                            <ul class="list-group list-group-flush">
+                                {% for a in row.assignments %}
+                                    <li class="list-group-item d-flex justify-content-between align-items-center gap-2 flex-wrap">
+                                        <span>
+                                            <div>{{ a.person }}</div>
+                                            <div class="small text-muted">
+                                                From:
+                                                {% if a.assigned_at %}
+                                                    {{ a.assigned_at|date:"SHORT_DATE_FORMAT" }}
+                                                {% else %}
+                                                    —
+                                                {% endif %}
+                                                |
+                                                To:
+                                                {% if a.released_at %}
+                                                    {{ a.released_at|date:"SHORT_DATE_FORMAT" }}
+                                                {% else %}
+                                                    —
+                                                {% endif %}
+                                                |
+                                                Status:
+                                                {% if a.derived_status == "Active" %}
+                                                    <span class="badge bg-success">Active</span>
+                                                {% elif a.derived_status == "Future" %}
+                                                    <span class="badge bg-warning text-dark">Future</span>
+                                                {% else %}
+                                                    <span class="badge bg-secondary">Closed</span>
+                                                {% endif %}
+                                            </div>
+                                        </span>
 
-                                  <form method="post"
-                                        action="{% url 'staff:assignment_release' a.pk %}"
-                                        class="ms-2">
-                                      {% csrf_token %}
-                                      <input type="hidden" name="released_on"
-                                             value="">
-                                      <button class="btn btn-sm btn-outline-danger"
-                                              type="submit"
-                                              onclick="return askReleaseDate(this);">
-                                          Release
-                                      </button>
-                                  </form>
-                            </li>
-                          {% endfor %}
-                        </ul>
-                      {% else %}
-                        <span class="text-muted">No assignments</span>
-                      {% endif %}
+                                        <form method="post"
+                                              action="{% url 'staff:assignment_release' a.pk %}"
+                                              class="ms-2">
+                                            {% csrf_token %}
+                                            <input type="hidden"
+                                                   name="released_on" value="">
+                                            <button class="btn btn-sm btn-outline-danger"
+                                                    type="submit"
+                                                    onclick="return askReleaseDate(this);">
+                                                Release
+                                            </button>
+                                        </form>
+                                    </li>
+                                {% endfor %}
+                            </ul>
+                        {% else %}
+                            <span class="text-muted">No current or future assignments</span>
+                        {% endif %}
                     </td>
 
                     <td class="text-center">

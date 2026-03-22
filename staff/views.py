@@ -8,7 +8,7 @@ from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
-from django.db.models import Count, Prefetch, Q
+from django.db.models import Prefetch, Q
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
@@ -1437,6 +1437,201 @@ class AssignmentCreateView(LoginRequiredMixin, ActiveCompanyMixin, View):
         return redirect("staff:assignments")
 
 
+class AssignmentConflictResolveView(LoginRequiredMixin, ActiveCompanyMixin, View):
+    template_name = "staff/assignment_conflict_resolve.html"
+
+    def get(self, request: HttpRequest, assignment_pk: int) -> HttpResponse:
+        company = self.get_active_company()
+        if company is None:
+            messages.error(request, "Active company is not selected.")
+            return redirect("staff:assignments")
+
+        conflict_assignment = get_object_or_404(
+            StaffingAssignment.objects.select_related(
+                "person",
+                "staffing_plan_item__position",
+                "staffing_plan_item__staffing_plan",
+            ),
+            pk=assignment_pk,
+            company=company,
+        )
+
+        item_pk_raw = (request.GET.get("item_pk") or "").strip()
+        person_raw = (request.GET.get("person") or "").strip()
+        assigned_on_raw = (request.GET.get("assigned_on") or "").strip()
+        released_on_raw = (request.GET.get("released_on") or "").strip()
+
+        if not item_pk_raw.isdigit():
+            messages.error(request, "Invalid target staffing plan item.")
+            return redirect("staff:assignments")
+
+        new_item = get_object_or_404(
+            StaffingPlanItem.objects.select_related("position", "staffing_plan"),
+            pk=int(item_pk_raw),
+            staffing_plan__company=company,
+        )
+
+        selected_person = None
+        if person_raw.isdigit():
+            selected_person = Person.objects.filter(
+                pk=int(person_raw),
+                company=company,
+            ).first()
+
+        assigned_on = _parse_date_from_post(assigned_on_raw)
+        released_on = _parse_date_from_post(released_on_raw)
+
+        default_trim_date = None
+        if assigned_on is not None:
+            default_trim_date = assigned_on - timedelta(days=1)
+
+        return render(
+            request,
+            self.template_name,
+            {
+                "active_company": company,
+                "conflict_assignment": conflict_assignment,
+                "new_item": new_item,
+                "selected_person": selected_person,
+                "assigned_on": assigned_on,
+                "released_on": released_on,
+                "assigned_on_raw": assigned_on_raw,
+                "released_on_raw": released_on_raw,
+                "default_trim_date": default_trim_date,
+            },
+        )
+
+    def post(self, request: HttpRequest, assignment_pk: int) -> HttpResponse:
+        company = self.get_active_company()
+        if company is None:
+            messages.error(request, "Active company is not selected.")
+            return redirect("staff:assignments")
+
+        conflict_assignment = get_object_or_404(
+            StaffingAssignment.objects.select_related(
+                "person",
+                "staffing_plan_item__position",
+                "staffing_plan_item__staffing_plan",
+            ),
+            pk=assignment_pk,
+            company=company,
+        )
+
+        item_pk_raw = (request.POST.get("item_pk") or "").strip()
+        person_raw = (request.POST.get("person") or "").strip()
+        assigned_on_raw = (request.POST.get("assigned_on") or "").strip()
+        released_on_raw = (request.POST.get("released_on") or "").strip()
+        resolution = (request.POST.get("resolution") or "").strip()
+        trim_to_raw = (request.POST.get("trim_to") or "").strip()
+
+        if not item_pk_raw.isdigit():
+            messages.error(request, "Invalid target staffing plan item.")
+            return redirect("staff:assignments")
+
+        if not person_raw.isdigit():
+            messages.error(request, "Invalid person.")
+            return redirect("staff:assignments")
+
+        new_item = get_object_or_404(
+            StaffingPlanItem.objects.select_related("position", "staffing_plan"),
+            pk=int(item_pk_raw),
+            staffing_plan__company=company,
+        )
+
+        selected_person = get_object_or_404(
+            Person,
+            pk=int(person_raw),
+            company=company,
+        )
+
+        assigned_on = _parse_date_from_post(assigned_on_raw)
+        released_on = _parse_date_from_post(released_on_raw)
+        trim_to = _parse_date_from_post(trim_to_raw)
+
+        if assigned_on is None:
+            messages.error(request, "Assigned on date is required.")
+            return redirect("staff:assignments")
+
+        if released_on is not None and released_on < assigned_on:
+            messages.error(
+                request, "Release date cannot be earlier than assignment date."
+            )
+            return redirect("staff:assignments")
+
+        if resolution not in {"trim_create", "delete_create", "keep_existing"}:
+            messages.error(request, "Please select a valid resolution.")
+            return redirect(
+                request.path
+                + "?"
+                + urlencode(
+                    {
+                        "item_pk": new_item.pk,
+                        "person": selected_person.pk,
+                        "assigned_on": assigned_on_raw,
+                        "released_on": released_on_raw,
+                    }
+                )
+            )
+
+        if resolution == "keep_existing":
+            messages.info(
+                request, "Existing assignment was kept. New assignment was not created."
+            )
+            return redirect("staff:assignments")
+
+        assigned_at_dt = _combine_date_as_day_start(assigned_on)
+        released_at_dt = _combine_date_as_day_end(released_on) if released_on else None
+
+        try:
+            with transaction.atomic():
+                if resolution == "delete_create":
+                    conflict_assignment.delete()
+
+                elif resolution == "trim_create":
+                    if trim_to is None:
+                        trim_to = assigned_on - timedelta(days=1)
+
+                    conflict_start = _dt_to_local_date(conflict_assignment.assigned_at)
+
+                    if conflict_start and trim_to < conflict_start:
+                        conflict_assignment.delete()
+                    else:
+                        conflict_assignment.released_at = _combine_date_as_day_end(
+                            trim_to
+                        )
+                        conflict_assignment.is_active = False
+                        conflict_assignment.save(
+                            update_fields=["released_at", "is_active"]
+                        )
+
+                if released_on is not None and released_on == assigned_on:
+                    messages.warning(
+                        request,
+                        "New assignment was not created because start and end dates are the same.",
+                    )
+                    return redirect("staff:assignments")
+
+                new_assignment = StaffingAssignment(
+                    staffing_plan_item=new_item,
+                    person=selected_person,
+                    company=company,
+                    assigned_at=assigned_at_dt,
+                    released_at=released_at_dt,
+                    is_active=True,
+                )
+                new_assignment.save()
+
+        except ValidationError as e:
+            messages.error(request, f"Could not resolve conflict: {e}")
+            return redirect("staff:assignments")
+        except IntegrityError:
+            messages.error(request, "Database error while resolving conflict.")
+            return redirect("staff:assignments")
+
+        messages.success(request, "Conflict resolved and new assignment created.")
+        return redirect("staff:assignments")
+
+
 class AssignmentReleaseView(LoginRequiredMixin, ActiveCompanyMixin, View):
     def post(self, request: HttpRequest, assignment_pk: int) -> HttpResponse:
         company = self.get_active_company()
@@ -1450,7 +1645,29 @@ class AssignmentReleaseView(LoginRequiredMixin, ActiveCompanyMixin, View):
             company=company,
         )
 
+        clip_before_start = _parse_date_from_post(request.POST.get("clip_before_start"))
         released_on = _parse_date_from_post(request.POST.get("released_on"))
+
+        # сценарий: release из формы конфликта
+        if clip_before_start is not None:
+            assigned_date = _dt_to_local_date(assignment.assigned_at)
+            release_date = clip_before_start - timedelta(days=1)
+
+            if assigned_date and release_date < assigned_date:
+                assignment.delete()
+                messages.success(
+                    request,
+                    "Conflicting assignment was removed because it would end before it starts.",
+                )
+            else:
+                assignment.released_at = _combine_date_as_day_end(release_date)
+                assignment.save(update_fields=["released_at"])
+                messages.success(request, "Conflicting assignment was clipped.")
+
+            next_url = (request.POST.get("next") or "").strip()
+            return redirect(next_url or "staff:assignments")
+
+        # обычный release из assignments
         released_at_dt = (
             _combine_date_as_day_end(released_on) if released_on else timezone.now()
         )
@@ -1466,7 +1683,6 @@ class AssignmentReleaseView(LoginRequiredMixin, ActiveCompanyMixin, View):
             next_url = (request.POST.get("next") or "").strip()
             return redirect(next_url or "staff:assignments")
 
-        # если assign и release в один календарный день — запись удаляем
         if assigned_date and release_date and release_date == assigned_date:
             assignment.delete()
             messages.success(
@@ -1477,9 +1693,7 @@ class AssignmentReleaseView(LoginRequiredMixin, ActiveCompanyMixin, View):
             return redirect(next_url or "staff:assignments")
 
         assignment.released_at = released_at_dt
-        assignment.is_active = False
-        assignment.save(update_fields=["released_at", "is_active"])
-        messages.success(request, "Released.")
+        assignment.save(update_fields=["released_at"])
 
         next_url = (request.POST.get("next") or "").strip()
         return redirect(next_url or "staff:assignments")
@@ -1501,34 +1715,79 @@ class AssignmentReleaseAllView(LoginRequiredMixin, ActiveCompanyMixin, View):
             messages.error(request, "No active staffing plan found.")
             return redirect("staff:assignments")
 
-        released_on = _parse_date_from_post(request.POST.get("released_on"))
-        now_dt = timezone.now()
-        released_at_dt = (
-            _combine_date_with_now_time(released_on, now_dt) if released_on else now_dt
+        release_day = (
+            _parse_date_from_post(request.POST.get("released_on"))
+            or timezone.localdate()
         )
+        release_at_dt = _combine_date_as_day_end(release_day)
 
-        qs = StaffingAssignment.objects.filter(
-            company=company,
-            is_active=True,
-            staffing_plan_item__staffing_plan=plan,
-        )
-
-        if (
-            released_on is not None
-            and qs.filter(assigned_at__date__gt=released_on).exists()
-        ):
-            messages.error(
-                request,
-                "Release date cannot be earlier than assignment date for one or more assignments.",
+        qs = (
+            StaffingAssignment.objects.filter(
+                company=company,
+                staffing_plan_item__staffing_plan=plan,
             )
-            return redirect("staff:assignments")
+            .select_related("person", "staffing_plan_item__position")
+            .order_by("assigned_at", "pk")
+        )
+
+        delete_ids: list[int] = []
+        update_ids: list[int] = []
+
+        for assignment in qs:
+            start_day = _dt_to_local_date(assignment.assigned_at)
+            end_day = _dt_to_local_date(assignment.released_at)
+
+            if start_day is None:
+                continue
+
+            # Уже полностью в прошлом относительно даты release-all
+            if end_day is not None and end_day < release_day:
+                continue
+
+            # Полностью в будущем -> удаляем
+            if start_day > release_day:
+                delete_ids.append(assignment.pk)
+                continue
+
+            # start == release_day -> после обрезки получится нулевой интервал -> удаляем
+            if start_day == release_day:
+                delete_ids.append(assignment.pk)
+                continue
+
+            # Пересекает дату release-all -> обрезаем
+            # (открытое или заканчивается позже выбранной даты)
+            if end_day is None or end_day >= release_day:
+                update_ids.append(assignment.pk)
 
         with transaction.atomic():
-            updated = qs.update(is_active=False, released_at=released_at_dt)
+            deleted_count = 0
+            clipped_count = 0
 
-        if updated:
-            messages.success(request, f"Released all ({updated}).")
-        else:
-            messages.info(request, "No active assignments to release.")
+            if delete_ids:
+                deleted_count = StaffingAssignment.objects.filter(
+                    pk__in=delete_ids
+                ).delete()[0]
+
+            if update_ids:
+                clipped_count = StaffingAssignment.objects.filter(
+                    pk__in=update_ids
+                ).update(
+                    released_at=release_at_dt,
+                )
+
+        if deleted_count:
+            messages.warning(
+                request,
+                f"{deleted_count} future or zero-length assignment(s) were deleted.",
+            )
+
+        if clipped_count:
+            messages.success(
+                request,
+                f"{clipped_count} assignment(s) were clipped to {release_day.strftime('%d.%m.%y')}.",
+            )
+
+        if not deleted_count and not clipped_count:
+            messages.info(request, "No assignments required changes.")
 
         return redirect("staff:assignments")

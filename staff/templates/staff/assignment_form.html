@@ -40,6 +40,17 @@
                     </div>
 
                     <div class="mb-3">
+                        <label class="form-label">Release on</label>
+                        {{ form.released_on }}
+                        {% if form.released_on.errors %}
+                            <div class="text-danger small mt-1">{{ form.released_on.errors }}</div>
+                        {% endif %}
+                        <div class="form-text">
+                            Leave empty for open-ended assignment.
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
                         <label class="form-label">Person</label>
                         {{ form.person }}
                         {% if form.person.errors %}
@@ -50,6 +61,67 @@
                     {% if form.non_field_errors %}
                         <div class="alert alert-danger py-2">
                             {{ form.non_field_errors }}
+                        </div>
+                    {% endif %}
+
+                    {% if interval_conflicts %}
+                        <div class="alert alert-warning mt-3">
+                            <strong>Conflicting assignments found:</strong>
+                            <div class="mt-2">
+                                <table class="table table-sm table-bordered align-middle mb-0">
+                                    <thead class="table-light">
+                                    <tr>
+                                        <th>Person</th>
+                                        <th>From</th>
+                                        <th>To</th>
+                                        <th>Position</th>
+                                        <th>Plan</th>
+                                        <th>Status</th>
+                                        <th style="width:120px;">Action</th>
+                                    </tr>
+                                    </thead>
+                                    <tbody>
+                                    {% for c in interval_conflicts %}
+                                        <tr>
+                                            <td>{{ c.person }}</td>
+                                            <td>{{ c.assigned_at|date:"SHORT_DATE_FORMAT" }}</td>
+                                            <td>
+                                                {% if c.released_at %}
+                                                    {{ c.released_at|date:"SHORT_DATE_FORMAT" }}
+                                                {% else %}
+                                                    —
+                                                {% endif %}
+                                            </td>
+                                            <td>{{ c.staffing_plan_item.position.name_long }}</td>
+                                            <td>{{ c.staffing_plan_item.staffing_plan.staffing_plan_name }}</td>
+                                            <td>
+                                                {% if c.released_at and c.released_at.date < reference_date %}
+                                                    <span class="badge bg-secondary">Closed</span>
+                                                {% elif c.assigned_at.date > reference_date %}
+                                                    <span class="badge bg-warning text-dark">Future</span>
+                                                {% else %}
+                                                    <span class="badge bg-success">Active</span>
+                                                {% endif %}
+                                            </td>
+
+                                            <td>
+                                                <a href="
+{% url 'staff:assignment_conflict_resolve' c.pk %}?item_pk={{ item.pk }}&person={{ form.person.value }}&assigned_on={{ form.assigned_on.value }}&released_on={{ form.released_on.value|default:'' }}"
+                                                   class="btn btn-sm btn-outline-primary">
+                                                    Resolve
+                                                </a>
+                                            </td>
+
+                                        </tr>
+                                    {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <div class="small mt-2 text-muted">
+                                You must resolve conflicts before creating a new
+                                assignment.
+                            </div>
                         </div>
                     {% endif %}
 
