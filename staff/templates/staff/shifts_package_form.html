@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}FRS DB | Create shift package{% endblock %}
+
+{% block content %}
+    {% include "includes/navbar.html" %}
+
+    <div class="container mt-4">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+            <div class="d-flex gap-2 flex-wrap">
+                <a class="btn btn-outline-secondary"
+                   href="{% url 'staff:shifts_list' %}">Back to shifts</a>
+                <a class="btn btn-outline-secondary"
+                   href="{% url 'staff:index' %}">Staff menu</a>
+            </div>
+        </div>
+
+        {% if not active_company %}
+            <div class="alert alert-warning">Active company is not selected.
+            </div>
+        {% else %}
+            <div class="card shadow-sm">
+                <div class="card-header">
+                    <strong>Create shift package</strong>
+                </div>
+
+                <div class="card-body">
+                    <form method="post">
+                        {% csrf_token %}
+
+                        {% if form.non_field_errors %}
+                            <div class="alert alert-danger py-2">
+                                {{ form.non_field_errors }}
+                            </div>
+                        {% endif %}
+
+                        <div class="mb-3">
+                            <label class="form-label"
+                                   for="{{ form.shift_type.id_for_label }}">Shift
+                                type</label>
+                            {{ form.shift_type }}
+                            {% if form.shift_type.errors %}
+                                <div class="text-danger small mt-1">{{ form.shift_type.errors }}</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label"
+                                   for="{{ form.first_anchor_date.id_for_label }}">First
+                                shift duty date</label>
+                            {{ form.first_anchor_date }}
+                            {% if form.first_anchor_date.errors %}
+                                <div class="text-danger small mt-1">{{ form.first_anchor_date.errors }}</div>
+                            {% endif %}
+                            <div class="form-text">
+                                This date will be used as the first on-duty day
+                                for shift 1. The rest of the package will be
+                                calculated automatically.
+                            </div>
+                        </div>
+
+                        <div class="form-check mb-3">
+                            {{ form.is_active }}
+                            <label class="form-check-label"
+                                   for="{{ form.is_active.id_for_label }}">
+                                Active
+                            </label>
+                            {% if form.is_active.errors %}
+                                <div class="text-danger small mt-1">{{ form.is_active.errors }}</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="alert alert-secondary py-2">
+                            A full package of shifts will be created
+                            automatically from the selected shift type pattern.
+                        </div>
+
+                        <div class="d-flex justify-content-end gap-2">
+                            <a class="btn btn-outline-secondary"
+                               href="{% url 'staff:shifts_list' %}">
+                                Cancel
+                            </a>
+                            <button type="submit" class="btn btn-primary">
+                                Create package
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+{% endblock %}

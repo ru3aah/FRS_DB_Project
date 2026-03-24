@@ -1,0 +1,219 @@
+{% extends "base.html" %}
+{% block title %}FRS DB | Staffing plan form{% endblock %}
+
+{% block content %}
+    {% include "includes/navbar.html" %}
+
+    <div class="container mt-4">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+            <div class="d-flex gap-2 flex-wrap">
+                <a class="btn btn-outline-secondary"
+                   href="{% url 'staff:staffing_plans_list' %}">Back to staffing
+                    plans</a>
+                <a class="btn btn-outline-secondary"
+                   href="{% url 'staff:index' %}">Staff menu</a>
+            </div>
+        </div>
+
+        {% if not active_company %}
+            <div class="alert alert-warning">Active company is not selected.
+            </div>
+        {% else %}
+            <div class="card shadow-sm">
+                <div class="card-header">
+                    <strong>
+                        {% if object %}Edit staffing plan{% else %}Add staffing
+                            plan{% endif %}
+                    </strong>
+                </div>
+
+                <div class="card-body">
+                    <form method="post">
+                        {% csrf_token %}
+
+                        {% if form.non_field_errors %}
+                            <div class="alert alert-danger py-2">
+                                {{ form.non_field_errors }}
+                            </div>
+                        {% endif %}
+
+                        <div class="mb-3">
+                            <label class="form-label">Plan name</label>
+                            {{ form.staffing_plan_name }}
+                            {% if form.staffing_plan_name.errors %}
+                                <div class="text-danger small mt-1">{{ form.staffing_plan_name.errors }}</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="form-check mb-3">
+                            {{ form.is_active }}
+                            <label class="form-check-label"
+                                   for="{{ form.is_active.id_for_label }}">
+                                Active
+                            </label>
+                            {% if form.is_active.errors %}
+                                <div class="text-danger small mt-1">{{ form.is_active.errors }}</div>
+                            {% endif %}
+                        </div>
+
+                        <hr>
+
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <strong>Plan items</strong>
+                            <button type="button"
+                                    class="btn btn-sm btn-outline-primary"
+                                    id="add-plan-item">
+                                Add row
+                            </button>
+                        </div>
+
+                        {{ items_formset.management_form }}
+
+                        {% if items_formset.non_form_errors %}
+                            <div class="alert alert-danger py-2">
+                                {{ items_formset.non_form_errors }}
+                            </div>
+                        {% endif %}
+
+                        <div class="table-responsive">
+                            <table class="table table-bordered align-middle"
+                                   id="plan-items-table">
+                                <thead class="table-light text-center">
+                                <tr>
+                                    <th>Position</th>
+                                    <th style="width:120px;">Qty</th>
+                                    <th style="width:100px;">Delete</th>
+                                </tr>
+                                </thead>
+                                <tbody>
+                                {% for item_form in items_formset %}
+                                    <tr class="plan-item-row">
+                                        <td>
+                                            {{ item_form.id }}
+                                            {{ item_form.position }}
+                                            {% if item_form.position.errors %}
+                                                <div class="text-danger small mt-1">{{ item_form.position.errors }}</div>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {{ item_form.position_qty }}
+                                            {% if item_form.position_qty.errors %}
+                                                <div class="text-danger small mt-1">{{ item_form.position_qty.errors }}</div>
+                                            {% endif %}
+                                        </td>
+                                        <td class="text-center">
+                                            {% if item_form.DELETE %}
+                                                <div class="form-check d-flex justify-content-center">
+                                                    {{ item_form.DELETE }}
+                                                </div>
+                                            {% else %}
+                                                —
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                {% empty %}
+                                    <tr class="plan-item-row">
+                                        <td colspan="3"
+                                            class="text-center text-muted py-3">
+                                            No items yet.
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <template id="empty-form-template">
+                            <tr class="plan-item-row">
+                                <td>
+                                    __POSITION__
+                                </td>
+                                <td>
+                                    __QTY__
+                                </td>
+                                <td class="text-center">
+                                    <div class="form-check d-flex justify-content-center">
+                                        __DELETE__
+                                    </div>
+                                </td>
+                            </tr>
+                        </template>
+
+                        <div class="d-flex justify-content-end gap-2 mt-3">
+                            <a class="btn btn-outline-secondary"
+                               href="{% url 'staff:staffing_plans_list' %}">
+                                Cancel
+                            </a>
+                            <button type="submit" class="btn btn-primary">
+                                Save
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+
+    <script>
+        (function () {
+            const addBtn = document.getElementById("add-plan-item");
+            const totalForms = document.getElementById("id_items-TOTAL_FORMS");
+            const tableBody = document.querySelector("#plan-items-table tbody");
+            const template = document.getElementById("empty-form-template");
+
+            if (!addBtn || !totalForms || !tableBody || !template) return;
+
+            function buildEmptyRow(index) {
+                const emptyPosition = `
+        <select name="items-${index}-position" class="form-select" id="id_items-${index}-position">
+
+                {% for value, label in items_formset.empty_form.position.field.choices %}
+            <option value="{{ value }}">{{ label }}</option>
+          {% endfor %}
+        </select>
+      `;
+
+                const emptyQty = `
+        <input type="number"
+               name="items-${index}-position_qty"
+               value="1"
+               min="1"
+               class="form-control"
+               id="id_items-${index}-position_qty">
+      `;
+
+                const emptyDelete = `
+        <input type="checkbox"
+               name="items-${index}-DELETE"
+               class="form-check-input"
+               id="id_items-${index}-DELETE">
+        <input type="hidden"
+               name="items-${index}-id"
+               id="id_items-${index}-id">
+      `;
+
+                let html = template.innerHTML;
+                html = html.replace("__POSITION__", emptyPosition);
+                html = html.replace("__QTY__", emptyQty);
+                html = html.replace("__DELETE__", emptyDelete);
+
+                const temp = document.createElement("tbody");
+                temp.innerHTML = html.trim();
+                return temp.firstElementChild;
+            }
+
+            addBtn.addEventListener("click", function () {
+                const index = parseInt(totalForms.value, 10);
+                const row = buildEmptyRow(index);
+
+                const placeholderRow = tableBody.querySelector("tr td[colspan='3']");
+                if (placeholderRow) {
+                    placeholderRow.parentElement.remove();
+                }
+
+                tableBody.appendChild(row);
+                totalForms.value = index + 1;
+            });
+        })();
+    </script>
+{% endblock %}

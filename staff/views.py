@@ -8,7 +8,7 @@ from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
-from django.db.models import Prefetch, Q
+from django.db.models import Prefetch
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
@@ -66,6 +66,44 @@ def _dt_to_local_date(dt) -> date | None:
     if timezone.is_aware(dt):
         return timezone.localtime(dt).date()
     return dt.date()
+
+
+def _assignment_is_effective_on_day(
+    assignment: StaffingAssignment,
+    target_day: date,
+) -> bool:
+    start_day = _dt_to_local_date(assignment.assigned_at)
+    end_day = _dt_to_local_date(assignment.released_at)
+
+    if start_day is None:
+        return False
+
+    if target_day < start_day:
+        return False
+
+    if end_day is not None and target_day > end_day:
+        return False
+
+    return True
+
+
+def _assignment_status_on_day(
+    assignment: StaffingAssignment,
+    target_day: date,
+) -> str:
+    start_day = _dt_to_local_date(assignment.assigned_at)
+    end_day = _dt_to_local_date(assignment.released_at)
+
+    if start_day is None:
+        return "Closed"
+
+    if start_day > target_day:
+        return "Future"
+
+    if end_day is not None and end_day < target_day:
+        return "Closed"
+
+    return "Active"
 
 
 def _get_people_from_active_plan(
@@ -353,9 +391,17 @@ class StaffRosterView(LoginRequiredMixin, ActiveCompanyMixin, TemplateView):
         ctx["month_end"] = month_end
         ctx["month_param"] = f"{month_start.year:04d}-{month_start.month:02d}"
 
+        prev_month = (month_start.replace(day=1) - timedelta(days=1)).replace(day=1)
+        next_month = (month_end + timedelta(days=1)).replace(day=1)
+
+        ctx["prev_month_param"] = f"{prev_month.year:04d}-{prev_month.month:02d}"
+        ctx["next_month_param"] = f"{next_month.year:04d}-{next_month.month:02d}"
+
         if company is None:
+            ctx["plan"] = None
             ctx["days"] = []
-            ctx["rows"] = []
+            ctx["day_headers"] = []
+            ctx["shift_groups"] = []
             return ctx
 
         plan = (
@@ -364,50 +410,12 @@ class StaffRosterView(LoginRequiredMixin, ActiveCompanyMixin, TemplateView):
             .first()
         )
         ctx["plan"] = plan
+
         if plan is None:
             ctx["days"] = []
-            ctx["rows"] = []
+            ctx["day_headers"] = []
+            ctx["shift_groups"] = []
             return ctx
-
-        items = list(
-            StaffingPlanItem.objects.filter(staffing_plan=plan)
-            .select_related("position")
-            .order_by("position__name_long")
-        )
-
-        active_assignments = list(
-            StaffingAssignment.objects.filter(
-                staffing_plan_item__staffing_plan=plan,
-                company=company,
-                is_active=True,
-            ).select_related("person", "staffing_plan_item")
-        )
-
-        persons_by_item: dict[int, list[Person]] = {}
-        for a in active_assignments:
-            persons_by_item.setdefault(a.staffing_plan_item_id, []).append(a.person)
-
-        mem_qs = ShiftMembership.objects.filter(
-            company=company,
-            is_active=True,
-        ).select_related("shift", "person", "shift__shift_type")
-        person_shift: dict[int, Shift] = {m.person_id: m.shift for m in mem_qs}
-
-        abs_qs = StaffAbsence.objects.filter(company=company, is_active=True)
-        absences_by_person: dict[int, list[tuple[date, date]]] = {}
-        for ab in abs_qs:
-            absences_by_person.setdefault(ab.person_id, []).append(
-                (ab.date_from, ab.date_to)
-            )
-
-        ov_qs = RosterOverride.objects.filter(
-            company=company, is_active=True, day__gte=month_start, day__lte=month_end
-        ).select_related("replacement_person", "staffing_plan_item")
-        overrides: dict[tuple[date, int], list[Person]] = {}
-        for ov in ov_qs:
-            overrides.setdefault((ov.day, ov.staffing_plan_item_id), []).append(
-                ov.replacement_person
-            )
 
         days = []
         d = month_start
@@ -416,56 +424,127 @@ class StaffRosterView(LoginRequiredMixin, ActiveCompanyMixin, TemplateView):
             d += timedelta(days=1)
         ctx["days"] = days
 
-        rows = []
+        # 2-letter weekday labels from current locale/settings
+        day_headers = []
         for day in days:
-            day_entries = []
-            for it in items:
-                base_people = persons_by_item.get(it.staffing_plan_item_id, [])
+            weekday_short = day.strftime("%a")[:2]
+            day_headers.append(
+                {
+                    "date": day,
+                    "weekday_short": weekday_short,
+                    "day_num": day.day,
+                }
+            )
+        ctx["day_headers"] = day_headers
 
-                filtered: list[dict] = []
-                anchor_missing = False
+        assignments = list(
+            StaffingAssignment.objects.filter(
+                company=company,
+                staffing_plan_item__staffing_plan=plan,
+            )
+            .select_related("person", "staffing_plan_item__position")
+            .order_by(
+                "staffing_plan_item__position__name_long",
+                "person__family_name",
+                "person__first_name",
+                "person__second_name",
+                "assigned_at",
+            )
+        )
 
-                for p in base_people:
-                    sh = person_shift.get(p.person_id)
-                    if sh is None:
-                        continue
+        effective_assignments = []
+        for a in assignments:
+            start_day = _dt_to_local_date(a.assigned_at)
+            end_day = _dt_to_local_date(a.released_at)
 
-                    if sh.anchor_date is None:
-                        anchor_missing = True
-                        continue
+            if start_day is None:
+                continue
+            if start_day > month_end:
+                continue
+            if end_day is not None and end_day < month_start:
+                continue
 
-                    if not sh.is_on_duty(day):
-                        continue
+            effective_assignments.append(a)
 
-                    if _is_absent(absences_by_person, p.person_id, day):
-                        continue
+        memberships = list(
+            ShiftMembership.objects.filter(company=company)
+            .select_related("shift", "shift__shift_type", "person")
+            .order_by("-assigned_at")
+        )
 
-                    filtered.append({"person": p, "shift": sh})
+        person_to_membership: dict[int, ShiftMembership] = {}
+        for m in memberships:
+            if m.person_id not in person_to_membership:
+                person_to_membership[m.person_id] = m
 
-                ov_people = overrides.get((day, it.staffing_plan_item_id), [])
-                if ov_people:
-                    final_people = []
-                    for p in ov_people:
-                        final_people.append(
-                            {
-                                "person": p,
-                                "shift": person_shift.get(p.person_id),
-                            }
-                        )
+        # top shift line: one code per day based on shift package anchors
+        shifts = list(
+            Shift.objects.filter(company=company, is_active=True)
+            .select_related("shift_type")
+            .order_by("shift_type__code_letter", "shift_no")
+        )
+
+        day_to_shift_codes: dict[date, list[str]] = {}
+        for shift in shifts:
+            for day in days:
+                if shift.anchor_date and shift.is_on_duty(day):
+                    day_to_shift_codes.setdefault(day, []).append(shift.shift_number)
+
+        grouped: dict[str, list[dict]] = {}
+
+        seq = 1
+        for a in effective_assignments:
+            person = a.person
+            position = a.staffing_plan_item.position
+            membership = person_to_membership.get(person.person_id)
+            shift = membership.shift if membership else None
+
+            start_day = _dt_to_local_date(a.assigned_at)
+            end_day = _dt_to_local_date(a.released_at)
+
+            cells = []
+            for day in days:
+                if start_day and day < start_day:
+                    cells.append("")
+                    continue
+
+                if end_day is not None and day > end_day:
+                    cells.append("")
+                    continue
+
+                if shift is None or shift.anchor_date is None:
+                    cells.append("")
+                    continue
+
+                if shift.is_on_duty(day):
+                    cells.append("W")
                 else:
-                    final_people = filtered
+                    cells.append("N")
 
-                day_entries.append(
-                    {
-                        "item": it,
-                        "people": final_people,
-                        "is_anchor_missing": anchor_missing,
-                    }
-                )
+            shift_label = shift.shift_number if shift else "No shift"
 
-            rows.append({"day": day, "entries": day_entries})
+            grouped.setdefault(shift_label, []).append(
+                {
+                    "seq": seq,
+                    "person": person,
+                    "position": position.name_long if position else "",
+                    "shift": shift_label,
+                    "cells": cells,
+                }
+            )
+            seq += 1
 
-        ctx["rows"] = rows
+        shift_groups = []
+        for shift_label in sorted(grouped.keys()):
+            shift_groups.append(
+                {
+                    "shift_label": shift_label,
+                    "rows": grouped[shift_label],
+                }
+            )
+
+        ctx["shift_groups"] = shift_groups
+        ctx["day_to_shift_codes"] = day_to_shift_codes
         return ctx
 
 

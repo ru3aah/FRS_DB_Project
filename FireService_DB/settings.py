@@ -105,17 +105,21 @@ CSRF_TRUSTED_ORIGINS = [
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 USE_X_FORWARDED_HOST = True
 
-LLANGUAGE_CODE = "en-us"
+LANGUAGE_CODE = "en-us"
 
 USE_I18N = True
 TIME_ZONE = os.getenv("TIME_ZONE", "UTC")
 USE_TZ = True
-USE_L10N = True
 
-DATE_FORMAT = "d.m.y"
-SHORT_DATE_FORMAT = "d.m.y"
-DATETIME_FORMAT = "d.m.y H:i"
-SHORT_DATETIME_FORMAT = "d.m.y H:i"
+# Базовые системные форматы проекта
+DATE_FORMAT = "d/m/Y"
+SHORT_DATE_FORMAT = "d/m/Y"
+DATETIME_FORMAT = "d/m/Y H:i"
+SHORT_DATETIME_FORMAT = "d/m/Y H:i"
+
+# Подключаем собственные format-модули, чтобы шаблоны брали именно эти форматы,
+# а не locale-формат вида 03/14/2026 3:11 p.m.
+FORMAT_MODULE_PATH = ["FireService_DB.formats"]
 
 STATIC_URL = "/static/"
 STATICFILES_DIRS = [BASE_DIR / "static"]

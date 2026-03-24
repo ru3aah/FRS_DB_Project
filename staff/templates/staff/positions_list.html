@@ -1,0 +1,176 @@
+{% extends "base.html" %}
+{% block title %}FRS DB | Positions{% endblock %}
+
+{% block content %}
+    {% include "includes/navbar.html" %}
+
+    <div class="container mt-4">
+
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+            <div class="d-flex gap-2 flex-wrap">
+                <a class="btn btn-outline-secondary"
+                   href="{% url 'staff:index' %}">Staff menu</a>
+                <a class="btn btn-outline-secondary"
+                   href="{% url 'staff:assignments' %}">Assignments</a>
+            </div>
+
+            <div class="d-flex gap-2 flex-wrap">
+                <a class="btn btn-outline-secondary"
+                   href="{{ toggle_filter_url }}">
+                    {{ toggle_filter_label }}
+                </a>
+                <a class="btn btn-primary"
+                   href="{% url 'staff:positions_add' %}">
+                    Add position
+                </a>
+            </div>
+        </div>
+
+        {% if not active_company %}
+            <div class="alert alert-warning">
+                Active company is not selected.
+            </div>
+        {% else %}
+            <div class="card">
+
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <strong>Positions</strong>
+                    <span class="text-muted small">{{ active_company.name }}</span>
+                </div>
+
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-striped table-hover align-middle mb-0">
+
+                            <thead class="table-light text-center">
+                            <tr>
+                                <th>Name (long)</th>
+                                <th style="width:120px;">Short</th>
+                                <th style="width:120px;">Type</th>
+                                <th style="width:120px;">Status</th>
+                                <th style="width:180px;">Created</th>
+                                <th style="width:260px;">Actions</th>
+                            </tr>
+                            </thead>
+
+                            <tbody>
+                            {% for position in positions %}
+                                <tr>
+
+                                    <td>{{ position.name_long }}</td>
+
+                                    <td class="text-center">
+                                        {{ position.name_short }}
+                                    </td>
+
+                                    <td class="text-center">
+                                        {{ position.type }}
+                                    </td>
+
+                                    <td class="text-center">
+                                        {% if position.is_active %}
+                                            <span class="badge bg-success">Active</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">Inactive</span>
+                                        {% endif %}
+                                    </td>
+
+                                    <td class="text-center">
+                                        {% if position.created_at %}
+                                            {{ position.created_at|date:"SHORT_DATETIME_FORMAT" }}
+                                        {% else %}
+                                            —
+                                        {% endif %}
+                                    </td>
+
+                                    <td>
+                                        <div class="d-flex gap-2 flex-wrap justify-content-center">
+
+                                            <a class="btn btn-sm btn-outline-primary"
+                                               href="{% url 'staff:positions_edit' position.pk %}">
+                                                Edit
+                                            </a>
+
+                                            <form method="post"
+                                                  action="{% url 'staff:positions_delete' position.pk %}">
+                                                {% csrf_token %}
+                                                <button type="submit"
+                                                        class="btn btn-sm btn-outline-danger">
+                                                    {% if position.is_active %}
+                                                        Deactivate{% else %}
+                                                        Delete{% endif %}
+                                                </button>
+                                            </form>
+
+                                            <a class="btn btn-sm btn-outline-secondary"
+                                               href="{% url 'staff:positions_jd' position.pk %}">
+                                                JD
+                                            </a>
+
+                                        </div>
+                                    </td>
+
+                                </tr>
+                            {% empty %}
+                                <tr>
+                                    <td colspan="6"
+                                        class="text-center py-4 text-muted">
+                                        No positions found.
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                            </tbody>
+
+                        </table>
+                    </div>
+                </div>
+
+                {% if is_paginated %}
+                    <div class="card-footer">
+                        <nav>
+                            <ul class="pagination mb-0 justify-content-center">
+
+                                {% if page_obj.has_previous %}
+                                    <li class="page-item">
+                                        <a class="page-link"
+                                           href="?page=
+                                                   {{ page_obj.previous_page_number }}{% if show_all %}&show=all{% endif %}">
+                                            Previous
+                                        </a>
+                                    </li>
+                                {% else %}
+                                    <li class="page-item disabled">
+                                        <span class="page-link">Previous</span>
+                                    </li>
+                                {% endif %}
+
+                                <li class="page-item disabled">
+                <span class="page-link">
+                  Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+                </span>
+                                </li>
+
+                                {% if page_obj.has_next %}
+                                    <li class="page-item">
+                                        <a class="page-link"
+                                           href="?page=
+                                                   {{ page_obj.next_page_number }}{% if show_all %}&show=all{% endif %}">
+                                            Next
+                                        </a>
+                                    </li>
+                                {% else %}
+                                    <li class="page-item disabled">
+                                        <span class="page-link">Next</span>
+                                    </li>
+                                {% endif %}
+
+                            </ul>
+                        </nav>
+                    </div>
+                {% endif %}
+
+            </div>
+        {% endif %}
+    </div>
+
+{% endblock %}

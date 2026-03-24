@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+{% block title %}FRS DB | Shifts{% endblock %}
+
+{% block content %}
+    {% include "includes/navbar.html" %}
+
+    <div class="container mt-4">
+
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+            <div class="d-flex gap-2 flex-wrap">
+                <a class="btn btn-outline-secondary"
+                   href="{% url 'staff:index' %}">Staff menu</a>
+                <a class="btn btn-outline-secondary"
+                   href="{% url 'staff:assignments' %}">Assignments</a>
+            </div>
+
+            <div class="d-flex gap-2 flex-wrap">
+                <a class="btn btn-outline-secondary"
+                   href="{{ toggle_filter_url }}">
+                    {{ toggle_filter_label }}
+                </a>
+                <a class="btn btn-primary" href="{% url 'staff:shifts_add' %}">
+                    Add shift
+                </a>
+                <a class="btn btn-outline-primary"
+                   href="{{ package_create_url }}">
+                    Create package
+                </a>
+            </div>
+        </div>
+
+        {% if not active_company %}
+            <div class="alert alert-warning">Active company is not selected.
+            </div>
+        {% else %}
+            <div class="card shadow-sm">
+
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <strong>Shifts</strong>
+                    <span class="text-muted small">{{ active_company.name }}</span>
+                </div>
+
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-striped table-hover align-middle mb-0">
+
+                            <thead class="table-light text-center">
+                            <tr>
+                                <th style="width:100px;">Code</th>
+                                <th style="width:80px;">№</th>
+                                <th style="width:160px;">Anchor date</th>
+                                <th style="width:120px;">Status</th>
+                                <th style="width:260px;">Actions</th>
+                            </tr>
+                            </thead>
+
+                            <tbody>
+                            {% for shift in shifts %}
+                                <tr>
+
+                                    <td class="text-center">
+                                        {{ shift.shift_type.code_letter }}
+                                    </td>
+
+                                    <td class="text-center">
+                                        {{ shift.shift_no }}
+                                    </td>
+
+                                    <td class="text-center">
+                                        {% if shift.anchor_date %}
+                                            {{ shift.anchor_date|date:"SHORT_DATE_FORMAT" }}
+                                        {% else %}
+                                            —
+                                        {% endif %}
+                                    </td>
+
+                                    <td class="text-center">
+                                        {% if shift.is_active %}
+                                            <span class="badge bg-success">Active</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">Inactive</span>
+                                        {% endif %}
+                                    </td>
+
+                                    <td>
+                                        <div class="d-flex justify-content-center gap-2 flex-wrap">
+
+                                            <a class="btn btn-sm btn-outline-primary"
+                                               href="{% url 'staff:shifts_edit' shift.pk %}">
+                                                Edit
+                                            </a>
+
+                                            <form method="post"
+                                                  action="{% url 'staff:shifts_delete' shift.pk %}">
+                                                {% csrf_token %}
+                                                <button type="submit"
+                                                        class="btn btn-sm btn-outline-danger">
+                                                    {% if shift.is_active %}
+                                                        Deactivate{% else %}
+                                                        Delete{% endif %}
+                                                </button>
+                                            </form>
+
+                                        </div>
+                                    </td>
+
+                                </tr>
+
+                            {% empty %}
+                                <tr>
+                                    <td colspan="5"
+                                        class="text-center py-4 text-muted">
+                                        No shifts found.
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                            </tbody>
+
+                        </table>
+                    </div>
+                </div>
+
+            </div>
+        {% endif %}
+    </div>
+
+{% endblock %}

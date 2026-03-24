@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+{% load staff_extras %}
+{% block title %}FRS DB | Roster{% endblock %}
+
+{% block content %}
+    {% include "includes/navbar.html" %}
+
+    <div class="container-fluid mt-4">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+            <div class="d-flex gap-2 flex-wrap">
+                <a class="btn btn-outline-secondary"
+                   href="{% url 'staff:index' %}">Staff menu</a>
+                <a class="btn btn-outline-secondary"
+                   href="{% url 'staff:staff_members' %}">Staff</a>
+            </div>
+
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+                <a class="btn btn-outline-primary btn-sm"
+                   href="?month={{ prev_month_param }}">
+                    ← Prev
+                </a>
+
+                <span class="fw-semibold">
+        {{ month_start|date:"F Y" }}
+      </span>
+
+                <a class="btn btn-outline-primary btn-sm"
+                   href="?month={{ next_month_param }}">
+                    Next →
+                </a>
+            </div>
+        </div>
+
+        {% if not active_company %}
+            <div class="alert alert-warning">Active company is not selected.
+            </div>
+
+        {% elif not plan %}
+            <div class="alert alert-warning">No active staffing plan found.
+            </div>
+
+        {% else %}
+            <div class="card shadow-sm mb-3">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <strong>Roster</strong>
+                    <span class="text-muted small">{{ active_company.name }}</span>
+                </div>
+                <div class="card-body">
+                    <div>
+                        Active staffing plan:
+                        <strong>
+                            {% if plan.staffing_plan_name %}
+                                {{ plan.staffing_plan_name }}
+                            {% else %}
+                                Staffing plan #{{ plan.pk }}
+                            {% endif %}
+                        </strong>
+                    </div>
+                    <div class="mt-1 text-muted small">
+                        Period: {{ month_start|date:"SHORT_DATE_FORMAT" }}
+                        – {{ month_end|date:"SHORT_DATE_FORMAT" }}
+                    </div>
+                </div>
+            </div>
+
+            {% if not shift_groups %}
+                <div class="alert alert-info">No roster data for selected
+                    period.
+                </div>
+            {% else %}
+                <div class="table-responsive">
+                    <table class="table table-bordered table-sm align-middle text-center mb-0">
+
+                        <thead class="table-light">
+                        <tr>
+                            <th rowspan="3" style="width:60px;">#</th>
+                            <th rowspan="3" style="min-width:220px;">Name</th>
+                            <th rowspan="3" style="width:90px;">Shift</th>
+                            <th rowspan="3" style="min-width:180px;">Position
+                            </th>
+
+                            {% for header in day_headers %}
+                                <th style="width:42px;">{{ header.weekday_short }}</th>
+                            {% endfor %}
+                        </tr>
+
+                        <tr>
+                            {% for header in day_headers %}
+                                <th style="width:42px;">{{ header.day_num }}</th>
+                            {% endfor %}
+                        </tr>
+
+                        <tr>
+                            {% for header in day_headers %}
+                                <th style="width:42px; font-size: 0.75rem;">
+                                    {% with codes=day_to_shift_codes|get_item:header.date %}
+                                        {% if codes %}
+                                            {{ codes|join:"/" }}
+                                        {% else %}
+                                            —
+                                        {% endif %}
+                                    {% endwith %}
+                                </th>
+                            {% endfor %}
+                        </tr>
+                        </thead>
+
+                        <tbody>
+                        {% for group in shift_groups %}
+                            <tr class="table-secondary">
+                                <td colspan="{{ day_headers|length|add:4 }}"
+                                    class="text-start fw-semibold">
+                                    Shift {{ group.shift_label }}
+                                </td>
+                            </tr>
+
+                            {% for row in group.rows %}
+                                <tr>
+                                    <td>{{ row.seq }}</td>
+                                    <td class="text-start">{{ row.person }}</td>
+                                    <td>{{ row.shift }}</td>
+                                    <td class="text-start">{{ row.position }}</td>
+
+                                    {% for cell in row.cells %}
+                                        <td>
+                                            {% if cell == "W" %}
+                                                <span class="badge bg-success">W</span>
+                                            {% elif cell == "N" %}
+                                                <span class="badge bg-secondary">N</span>
+                                            {% elif cell %}
+                                                {{ cell }}
+                                            {% else %}
+                                                &nbsp;
+                                            {% endif %}
+                                        </td>
+                                    {% endfor %}
+                                </tr>
+                            {% endfor %}
+                        {% endfor %}
+                        </tbody>
+
+                    </table>
+                </div>
+            {% endif %}
+        {% endif %}
+    </div>
+{% endblock %}

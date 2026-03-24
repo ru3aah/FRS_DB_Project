@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+{% block title %}FRS DB | Shift type form{% endblock %}
+
+{% block content %}
+    {% include "includes/navbar.html" %}
+
+    <div class="container mt-4">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+            <div class="d-flex gap-2 flex-wrap">
+                <a class="btn btn-outline-secondary"
+                   href="{% url 'staff:shift_types_list' %}">Back to shift
+                    types</a>
+                <a class="btn btn-outline-secondary"
+                   href="{% url 'staff:index' %}">Staff menu</a>
+            </div>
+        </div>
+
+        {% if not active_company %}
+            <div class="alert alert-warning">Active company is not selected.
+            </div>
+        {% else %}
+            <div class="card shadow-sm">
+                <div class="card-header">
+                    <strong>
+                        {% if object %}Edit shift type{% else %}Add shift
+                            type{% endif %}
+                    </strong>
+                </div>
+
+                <div class="card-body">
+                    <form method="post">
+                        {% csrf_token %}
+
+                        {% if form.non_field_errors %}
+                            <div class="alert alert-danger py-2">
+                                {{ form.non_field_errors }}
+                            </div>
+                        {% endif %}
+
+                        {% if form.code_letter.is_hidden %}
+                            {{ form.code_letter }}
+                        {% else %}
+                            <div class="mb-3">
+                                <label class="form-label"
+                                       for="{{ form.code_letter.id_for_label }}">Code
+                                    letter</label>
+                                {{ form.code_letter }}
+                                {% if form.code_letter.errors %}
+                                    <div class="text-danger small mt-1">{{ form.code_letter.errors }}</div>
+                                {% endif %}
+                            </div>
+                        {% endif %}
+
+                        <div class="mb-3">
+                            <label class="form-label"
+                                   for="{{ form.shift_type_name.id_for_label }}">Name</label>
+                            {{ form.shift_type_name }}
+                            {% if form.shift_type_name.errors %}
+                                <div class="text-danger small mt-1">{{ form.shift_type_name.errors }}</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label"
+                                       for="{{ form.shift_days_on.id_for_label }}">Days
+                                    on</label>
+                                {{ form.shift_days_on }}
+                                {% if form.shift_days_on.errors %}
+                                    <div class="text-danger small mt-1">{{ form.shift_days_on.errors }}</div>
+                                {% endif %}
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label"
+                                       for="{{ form.shift_days_off.id_for_label }}">Days
+                                    off</label>
+                                {{ form.shift_days_off }}
+                                {% if form.shift_days_off.errors %}
+                                    <div class="text-danger small mt-1">{{ form.shift_days_off.errors }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <div class="mt-3" id="pattern-preview-block">
+                            <div class="mb-3">
+                                <label class="form-label"
+                                       for="{{ form.shift_type_short.id_for_label }}">Pattern</label>
+                                {{ form.shift_type_short }}
+                                {% if form.shift_type_short.errors %}
+                                    <div class="text-danger small mt-1">{{ form.shift_type_short.errors }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <div class="form-check mb-3">
+                            {{ form.is_active }}
+                            <label class="form-check-label"
+                                   for="{{ form.is_active.id_for_label }}">
+                                Active
+                            </label>
+                            {% if form.is_active.errors %}
+                                <div class="text-danger small mt-1">{{ form.is_active.errors }}</div>
+                            {% endif %}
+                        </div>
+
+                        {% if form.pattern_feedback %}
+                            {% if form.pattern_feedback.error %}
+                                <div class="alert alert-danger py-2">
+                                    {{ form.pattern_feedback.error }}
+                                </div>
+                            {% endif %}
+
+                            {% if form.pattern_feedback.duplicate_message %}
+                                <div class="alert alert-warning py-2">
+                                    {{ form.pattern_feedback.duplicate_message }}
+                                </div>
+                            {% endif %}
+                        {% endif %}
+
+                        {% if form.pattern_feedback.duplicate_kind == "inactive" and not object %}
+                            <div class="form-check mb-3">
+                                <input class="form-check-input"
+                                       type="checkbox"
+                                       name="activate_existing"
+                                       value="1"
+                                       id="id_activate_existing">
+                                <label class="form-check-label"
+                                       for="id_activate_existing">
+                                    Activate existing matching shift type
+                                    instead of creating a new one
+                                </label>
+                            </div>
+                        {% endif %}
+
+                        <div class="d-flex justify-content-end gap-2">
+                            <a class="btn btn-outline-secondary"
+                               href="{% url 'staff:shift_types_list' %}">
+                                Cancel
+                            </a>
+                            <button type="submit" class="btn btn-primary">
+                                Save
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+{% endblock %}
