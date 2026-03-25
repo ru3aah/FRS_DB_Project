@@ -25,12 +25,13 @@ class PositionAdmin(admin.ModelAdmin):
         "company",
         "name_long",
         "name_short",
+        "roster_code",
         "type",
         "is_active",
         "updated_at",
     )
     list_filter = ("company", "type", "is_active")
-    search_fields = ("name_long", "name_short")
+    search_fields = ("name_long", "name_short", "roster_code")
     ordering = ("company", "name_long")
     list_per_page = 50
     readonly_fields = ("created_at", "updated_at")
@@ -106,6 +107,28 @@ class StaffingPlanAdmin(admin.ModelAdmin):
     inlines = [StaffingPlanItemInline]
 
 
+@admin.register(StaffingPlanItem)
+class StaffingPlanItemAdmin(admin.ModelAdmin):
+    list_display = (
+        "staffing_plan_item_id",
+        "staffing_plan",
+        "position",
+        "position_qty",
+        "created_at",
+        "updated_at",
+    )
+    list_filter = ("staffing_plan__company", "position")
+    search_fields = (
+        "staffing_plan__staffing_plan_name",
+        "position__name_long",
+        "position__name_short",
+        "position__roster_code",
+    )
+    ordering = ("staffing_plan__company", "staffing_plan", "position__name_long")
+    readonly_fields = ("created_at", "updated_at")
+    autocomplete_fields = ("staffing_plan", "position")
+
+
 @admin.register(StaffingAssignment)
 class StaffingAssignmentAdmin(admin.ModelAdmin):
     list_display = (
@@ -122,8 +145,10 @@ class StaffingAssignmentAdmin(admin.ModelAdmin):
         "person__first_name",
         "person__second_name",
         "person__family_name",
+        "staffing_plan_item__position__name_long",
     )
-    ordering = ("company", "-is_active", "-assigned_at")
+    ordering = ("company", "-assigned_at")
+    autocomplete_fields = ("staffing_plan_item", "person")
 
 
 @admin.register(ShiftMembership)
@@ -138,9 +163,15 @@ class ShiftMembershipAdmin(admin.ModelAdmin):
         "released_at",
     )
     list_filter = ("company", "is_active", "shift")
-    search_fields = ("person__first_name", "person__second_name", "person__family_name")
-    ordering = ("company", "-is_active", "-assigned_at")
+    search_fields = (
+        "person__first_name",
+        "person__second_name",
+        "person__family_name",
+        "shift__shift_number",
+    )
+    ordering = ("company", "-assigned_at")
     readonly_fields = ("assigned_at",)
+    autocomplete_fields = ("person", "shift")
 
 
 class StaffAbsenceDocumentInline(admin.TabularInline):
@@ -169,8 +200,9 @@ class StaffAbsenceAdmin(admin.ModelAdmin):
         "person__family_name",
         "note",
     )
-    ordering = ("company", "-is_active", "-created_at")
+    ordering = ("company", "-created_at")
     readonly_fields = ("created_at",)
+    autocomplete_fields = ("person",)
     inlines = [StaffAbsenceDocumentInline]
 
 
@@ -203,8 +235,9 @@ class TemporaryCoverAdmin(admin.ModelAdmin):
         "absent_person__family_name",
         "note",
     )
-    ordering = ("company", "-is_active", "-created_at")
+    ordering = ("company", "-created_at")
     readonly_fields = ("created_at",)
+    autocomplete_fields = ("staffing_plan_item", "absent_person", "covering_person")
     inlines = [TemporaryCoverDocumentInline]
 
 
@@ -233,8 +266,9 @@ class ExtraWorkAdmin(admin.ModelAdmin):
         "person__family_name",
         "note",
     )
-    ordering = ("company", "-is_active", "-created_at")
+    ordering = ("company", "-created_at")
     readonly_fields = ("created_at",)
+    autocomplete_fields = ("person", "staffing_plan_item")
     inlines = [ExtraWorkDocumentInline]
 
 
@@ -260,5 +294,10 @@ class RosterOverrideAdmin(admin.ModelAdmin):
         "replaced_person__family_name",
         "note",
     )
-    ordering = ("company", "-is_active", "-created_at")
+    ordering = ("company", "-created_at")
     readonly_fields = ("created_at",)
+    autocomplete_fields = (
+        "staffing_plan_item",
+        "replaced_person",
+        "replacement_person",
+    )

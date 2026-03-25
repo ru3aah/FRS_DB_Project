@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from datetime import date
 
 from django.core.exceptions import ValidationError
@@ -42,6 +43,13 @@ class Position(models.Model):
         help_text="Short position name (e.g. Chief, FF)",
     )
 
+    roster_code = models.CharField(
+        max_length=2,
+        null=True,
+        blank=True,
+        help_text="Two-letter roster code for this position, e.g. TL, CR, DO, ME, FF, MT.",
+    )
+
     type = models.CharField(
         max_length=5,
         choices=POSITION_TYPE_CHOICES,
@@ -69,7 +77,34 @@ class Position(models.Model):
                 fields=["company", "name_short"],
                 name="uq_staff_position_company_name_short",
             ),
+            models.UniqueConstraint(
+                fields=["company", "roster_code"],
+                name="uq_staff_position_company_roster_code",
+                condition=Q(roster_code__isnull=False),
+            ),
         ]
+
+    def clean(self):
+        super().clean()
+
+        self.roster_code = (self.roster_code or "").strip().upper()
+
+        if not self.roster_code:
+            return
+
+        if not re.fullmatch(r"[A-Z]{2}", self.roster_code):
+            raise ValidationError(
+                {
+                    "roster_code": (
+                        "Roster code must contain exactly 2 uppercase Latin letters."
+                    )
+                }
+            )
+
+    def save(self, *args, **kwargs):
+        self.roster_code = (self.roster_code or "").strip().upper()
+        self.full_clean()
+        return super().save(*args, **kwargs)
 
     def __str__(self) -> str:
         return self.name_long
@@ -415,7 +450,6 @@ class StaffingPlanItem(models.Model):
 class StaffingAssignment(models.Model):
     """
     Employment fact = assignment to a concrete staffing plan position.
-    If person has no active/overlapping assignment, person is not hired.
     """
 
     staffing_assignment_id = models.BigAutoField(primary_key=True)
@@ -445,7 +479,7 @@ class StaffingAssignment(models.Model):
 
     class Meta:
         db_table = "staff_staffing_assignments"
-        ordering = ["-is_active", "-assigned_at"]
+        ordering = ["-assigned_at"]
 
     def clean(self):
         super().clean()
@@ -502,10 +536,7 @@ class StaffingAssignment(models.Model):
         return super().save(*args, **kwargs)
 
     def __str__(self) -> str:
-        return (
-            f"{self.person} -> {self.staffing_plan_item} "
-            f"({'active' if self.is_active else 'inactive'})"
-        )
+        return f"{self.person} -> {self.staffing_plan_item}"
 
 
 class ShiftMembership(models.Model):
@@ -540,7 +571,7 @@ class ShiftMembership(models.Model):
 
     class Meta:
         db_table = "staff_shift_memberships"
-        ordering = ["-is_active", "-assigned_at"]
+        ordering = ["-assigned_at"]
         constraints = [
             models.UniqueConstraint(
                 fields=["company", "person"],
@@ -550,16 +581,12 @@ class ShiftMembership(models.Model):
         ]
 
     def __str__(self) -> str:
-        return (
-            f"{self.person} -> {self.shift} "
-            f"({'active' if self.is_active else 'inactive'})"
-        )
+        return f"{self.person} -> {self.shift}"
 
 
 class StaffAbsence(models.Model):
     """
     Temporary absence from work.
-    Any absence may have one or more supporting documents.
     """
 
     ABSENCE_TYPE_CHOICES = (
@@ -599,7 +626,7 @@ class StaffAbsence(models.Model):
 
     class Meta:
         db_table = "staff_absences"
-        ordering = ["-is_active", "-created_at"]
+        ordering = ["-created_at"]
         constraints = [
             models.CheckConstraint(
                 condition=Q(date_to__gte=models.F("date_from")),
@@ -624,10 +651,6 @@ class StaffAbsence(models.Model):
 
 
 class StaffAbsenceDocument(models.Model):
-    """
-    Supporting documents for absence.
-    """
-
     absence_document_id = models.BigAutoField(primary_key=True)
 
     absence = models.ForeignKey(
@@ -659,11 +682,6 @@ class StaffAbsenceDocument(models.Model):
 
 
 class TemporaryCover(models.Model):
-    """
-    Temporary replacement when one worker covers another worker's duty.
-    This does not change the base staffing assignment.
-    """
-
     temporary_cover_id = models.BigAutoField(primary_key=True)
 
     company = models.ForeignKey(
@@ -702,7 +720,7 @@ class TemporaryCover(models.Model):
 
     class Meta:
         db_table = "staff_temporary_covers"
-        ordering = ["-is_active", "-created_at"]
+        ordering = ["-created_at"]
         constraints = [
             models.UniqueConstraint(
                 fields=["company", "day", "staffing_plan_item", "covering_person"],
@@ -738,10 +756,6 @@ class TemporaryCover(models.Model):
 
 
 class TemporaryCoverDocument(models.Model):
-    """
-    Supporting documents for temporary cover.
-    """
-
     temporary_cover_document_id = models.BigAutoField(primary_key=True)
 
     temporary_cover = models.ForeignKey(
@@ -776,11 +790,6 @@ class TemporaryCoverDocument(models.Model):
 
 
 class ExtraWork(models.Model):
-    """
-    Additional work outside the base shift schedule.
-    Worker agrees to work extra day(s) beyond normal roster.
-    """
-
     extra_work_id = models.BigAutoField(primary_key=True)
 
     company = models.ForeignKey(
@@ -812,7 +821,7 @@ class ExtraWork(models.Model):
 
     class Meta:
         db_table = "staff_extra_works"
-        ordering = ["-is_active", "-created_at"]
+        ordering = ["-created_at"]
         constraints = [
             models.UniqueConstraint(
                 fields=["company", "person", "day"],
@@ -841,10 +850,6 @@ class ExtraWork(models.Model):
 
 
 class ExtraWorkDocument(models.Model):
-    """
-    Supporting documents for extra work.
-    """
-
     extra_work_document_id = models.BigAutoField(primary_key=True)
 
     extra_work = models.ForeignKey(
@@ -878,8 +883,6 @@ class ExtraWorkDocument(models.Model):
 class RosterOverride(models.Model):
     """
     Legacy one-day replacement / override for roster.
-    Kept temporarily for compatibility until UI/views are migrated
-    to TemporaryCover / ExtraWork workflow.
     """
 
     override_id = models.BigAutoField(primary_key=True)
@@ -920,7 +923,7 @@ class RosterOverride(models.Model):
 
     class Meta:
         db_table = "staff_roster_overrides"
-        ordering = ["-is_active", "-created_at"]
+        ordering = ["-created_at"]
         constraints = [
             models.UniqueConstraint(
                 fields=["company", "day", "staffing_plan_item", "replacement_person"],

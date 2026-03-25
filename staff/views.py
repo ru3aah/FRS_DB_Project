@@ -29,11 +29,9 @@ from .forms import (
 )
 from .models import (
     Position,
-    RosterOverride,
     Shift,
     ShiftMembership,
     ShiftType,
-    StaffAbsence,
     StaffingAssignment,
     StaffingPlan,
     StaffingPlanItem,
@@ -505,21 +503,21 @@ class StaffRosterView(LoginRequiredMixin, ActiveCompanyMixin, TemplateView):
             cells = []
             for day in days:
                 if start_day and day < start_day:
-                    cells.append("")
+                    cells.append("--")
                     continue
 
                 if end_day is not None and day > end_day:
-                    cells.append("")
+                    cells.append("--")
                     continue
 
                 if shift is None or shift.anchor_date is None:
-                    cells.append("")
+                    cells.append("--")
                     continue
 
                 if shift.is_on_duty(day):
-                    cells.append("W")
+                    cells.append("WD")
                 else:
-                    cells.append("N")
+                    cells.append("NN")
 
             shift_label = shift.shift_number if shift else "No shift"
 
@@ -580,7 +578,7 @@ class PositionListView(LoginRequiredMixin, ActiveCompanyMixin, ListView):
 class PositionCreateView(LoginRequiredMixin, ActiveCompanyMixin, CreateView):
     model = Position
     template_name = "staff/positions_form.html"
-    fields = ["name_long", "name_short", "type", "is_active"]
+    fields = ["name_long", "name_short", "roster_code", "type", "is_active"]
     success_url = reverse_lazy("staff:positions_list")
 
     def form_valid(self, form):
@@ -596,7 +594,7 @@ class PositionCreateView(LoginRequiredMixin, ActiveCompanyMixin, CreateView):
 class PositionUpdateView(LoginRequiredMixin, ActiveCompanyMixin, UpdateView):
     model = Position
     template_name = "staff/positions_form.html"
-    fields = ["name_long", "name_short", "type", "is_active"]
+    fields = ["name_long", "name_short", "roster_code", "type", "is_active"]
     success_url = reverse_lazy("staff:positions_list")
 
     def get_queryset(self):

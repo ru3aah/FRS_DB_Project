@@ -46,6 +46,7 @@
                             <tr>
                                 <th>Name (long)</th>
                                 <th style="width:120px;">Short</th>
+                                <th style="width:120px;">Roster code</th>
                                 <th style="width:120px;">Type</th>
                                 <th style="width:120px;">Status</th>
                                 <th style="width:180px;">Created</th>
@@ -61,6 +62,10 @@
 
                                     <td class="text-center">
                                         {{ position.name_short }}
+                                    </td>
+
+                                    <td class="text-center">
+                                        {{ position.roster_code }}
                                     </td>
 
                                     <td class="text-center">
@@ -113,7 +118,7 @@
                                 </tr>
                             {% empty %}
                                 <tr>
-                                    <td colspan="6"
+                                    <td colspan="7"
                                         class="text-center py-4 text-muted">
                                         No positions found.
                                     </td>

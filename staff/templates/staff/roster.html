@@ -1,8 +1,12 @@
 {% extends "base.html" %}
+{% load static %}
 {% load staff_extras %}
 {% block title %}FRS DB | Roster{% endblock %}
 
 {% block content %}
+    <link rel="stylesheet" href="{% static 'css/frs_ui.css' %}">
+    <link rel="stylesheet" href="{% static 'staff/css/roster.css' %}">
+
     {% include "includes/navbar.html" %}
 
     <div class="container-fluid mt-4">
@@ -68,36 +72,53 @@
                     period.
                 </div>
             {% else %}
-                <div class="table-responsive">
-                    <table class="table table-bordered table-sm align-middle text-center mb-0">
-
-                        <thead class="table-light">
-                        <tr>
-                            <th rowspan="3" style="width:60px;">#</th>
-                            <th rowspan="3" style="min-width:220px;">Name</th>
-                            <th rowspan="3" style="width:90px;">Shift</th>
-                            <th rowspan="3" style="min-width:180px;">Position
+                <div class="frs-scroll-panel">
+                    <table class="table table-sm align-middle text-center frs-table-fixed">
+                        <thead>
+                        <tr class="frs-sticky-top-1">
+                            <th rowspan="3"
+                                class="roster-col-seq frs-sticky-left-1">#
+                            </th>
+                            <th rowspan="3"
+                                class="roster-col-name frs-sticky-left-2">Name
+                            </th>
+                            <th rowspan="3"
+                                class="roster-col-shift frs-sticky-left-3">Shift
+                            </th>
+                            <th rowspan="3"
+                                class="roster-col-position frs-sticky-left-4">
+                                Position
                             </th>
 
                             {% for header in day_headers %}
-                                <th style="width:42px;">{{ header.weekday_short }}</th>
+                                <th class="roster-day-col">
+                                    {{ header.weekday_short }}
+                                </th>
                             {% endfor %}
                         </tr>
 
-                        <tr>
+                        <tr class="frs-sticky-top-2">
                             {% for header in day_headers %}
-                                <th style="width:42px;">{{ header.day_num }}</th>
+                                <th class="roster-day-col">
+                                    {{ header.day_num }}
+                                </th>
                             {% endfor %}
                         </tr>
 
-                        <tr>
+                        <tr class="frs-sticky-top-3">
                             {% for header in day_headers %}
-                                <th style="width:42px; font-size: 0.75rem;">
+                                <th class="roster-day-col">
                                     {% with codes=day_to_shift_codes|get_item:header.date %}
                                         {% if codes %}
-                                            {{ codes|join:"/" }}
+                                            {% with first_code=codes.0 %}
+                                                {% with pattern_key=first_code|slice:":1" shift_num=first_code|slice:"1:" %}
+                                                    <span class="roster-pattern-chip roster-pattern-{{ pattern_key }} roster-shift-num-{{ shift_num }}">
+                                      {{ codes|join:"/" }}
+                                  </span>
+                                                {% endwith %}
+                                            {% endwith %}
                                         {% else %}
-                                            —
+                                            <span class="roster-day-code frs-text-muted">--</span>
                                         {% endif %}
                                     {% endwith %}
                                 </th>
@@ -107,7 +128,7 @@
 
                         <tbody>
                         {% for group in shift_groups %}
-                            <tr class="table-secondary">
+                            <tr class="frs-group-row">
                                 <td colspan="{{ day_headers|length|add:4 }}"
                                     class="text-start fw-semibold">
                                     Shift {{ group.shift_label }}
@@ -116,21 +137,23 @@
 
                             {% for row in group.rows %}
                                 <tr>
-                                    <td>{{ row.seq }}</td>
-                                    <td class="text-start">{{ row.person }}</td>
-                                    <td>{{ row.shift }}</td>
-                                    <td class="text-start">{{ row.position }}</td>
+                                    <td class="frs-sticky-left-1">{{ row.seq }}</td>
+                                    <td class="text-start frs-sticky-left-2">{{ row.person }}</td>
+                                    <td class="frs-sticky-left-3">{{ row.shift }}</td>
+                                    <td class="text-start frs-sticky-left-4">{{ row.position }}</td>
 
                                     {% for cell in row.cells %}
-                                        <td>
-                                            {% if cell == "W" %}
-                                                <span class="badge bg-success">W</span>
-                                            {% elif cell == "N" %}
-                                                <span class="badge bg-secondary">N</span>
+                                        <td class="roster-day-col">
+                                            {% if cell == "WD" %}
+                                                <span class="badge bg-success frs-code-cell">WD</span>
+                                            {% elif cell == "NN" %}
+                                                <span class="badge bg-secondary frs-code-cell">NN</span>
+                                            {% elif cell == "--" %}
+                                                <span class="frs-code-cell frs-text-muted">--</span>
                                             {% elif cell %}
-                                                {{ cell }}
+                                                <span class="frs-code-cell">{{ cell }}</span>
                                             {% else %}
-                                                &nbsp;
+                                                <span class="frs-code-cell frs-text-muted">--</span>
                                             {% endif %}
                                         </td>
                                     {% endfor %}
@@ -138,7 +161,6 @@
                             {% endfor %}
                         {% endfor %}
                         </tbody>
-
                     </table>
                 </div>
             {% endif %}

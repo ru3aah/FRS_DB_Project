@@ -1,0 +1,109 @@
+.roster-col-seq {
+  width: 60px;
+  min-width: 60px;
+  max-width: 60px;
+}
+
+.roster-col-name {
+  width: 220px;
+  min-width: 220px;
+  max-width: 220px;
+}
+
+.roster-col-shift {
+  width: 90px;
+  min-width: 90px;
+  max-width: 90px;
+}
+
+.roster-col-position {
+  width: 180px;
+  min-width: 180px;
+  max-width: 180px;
+}
+
+.roster-day-col {
+  width: 42px;
+  min-width: 42px;
+  max-width: 42px;
+  padding: 0.25rem;
+  font-size: 0.8rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: clip;
+}
+
+.roster-day-code {
+  display: inline-block;
+  width: 100%;
+  text-align: center;
+  font-size: 0.68rem;
+  line-height: 1.1;
+  font-weight: 600;
+}
+
+.roster-pattern-chip {
+  display: inline-block;
+  width: 100%;
+  border-radius: 0.25rem;
+  padding: 0.1rem 0.15rem;
+  font-size: 0.68rem;
+  line-height: 1.1;
+  font-weight: 600;
+  color: #212529;
+}
+
+.roster-pattern-A {
+  background: #d1ecf1;
+}
+
+.roster-pattern-B {
+  background: #d4edda;
+}
+
+.roster-pattern-C {
+  background: #fff3cd;
+}
+
+.roster-pattern-D {
+  background: #f8d7da;
+}
+
+.roster-pattern-E {
+  background: #e2d9f3;
+}
+
+.roster-pattern-F {
+  background: #fde2cf;
+}
+
+.roster-pattern-default {
+  background: #e9ecef;
+}
+
+/* text color by shift number inside pattern */
+
+.roster-shift-num-1 {
+  color: #0d6efd; /* blue */
+}
+
+.roster-shift-num-2 {
+  color: #198754; /* green */
+}
+
+.roster-shift-num-3 {
+  color: #dc3545; /* red */
+}
+
+.roster-shift-num-4 {
+  color: #6f42c1; /* purple */
+}
+
+.roster-shift-num-5 {
+  color: #fd7e14; /* orange */
+}
+
+/* fallback */
+.roster-shift-num-default {
+  color: #212529;
+}
