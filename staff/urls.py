@@ -7,6 +7,10 @@ from .views import (
     AssignmentReleaseAllView,
     AssignmentReleaseView,
     AssignmentsView,
+    LeaveTypeCreateView,
+    LeaveTypeDeactivateView,
+    LeaveTypeListView,
+    LeaveTypeUpdateView,
     PositionCreateView,
     PositionDeactivateView,
     PositionListView,
@@ -131,5 +135,17 @@ urlpatterns = [
         "assignments/conflicts/<int:assignment_pk>/resolve/",
         AssignmentConflictResolveView.as_view(),
         name="assignment_conflict_resolve",
+    ),
+    path("leave-types/", LeaveTypeListView.as_view(), name="leave_types_list"),
+    path("leave-types/add/", LeaveTypeCreateView.as_view(), name="leave_types_add"),
+    path(
+        "leave-types/<int:pk>/edit/",
+        LeaveTypeUpdateView.as_view(),
+        name="leave_types_edit",
+    ),
+    path(
+        "leave-types/<int:pk>/delete/",
+        LeaveTypeDeactivateView.as_view(),
+        name="leave_types_delete",
     ),
 ]

@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block title %}FRS DB | Leave type form{% endblock %}
+
+{% block content %}
+    {% include "includes/navbar.html" %}
+
+    <div class="container mt-4">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+            <div class="d-flex gap-2 flex-wrap">
+                <a class="btn btn-outline-secondary"
+                   href="{% url 'staff:leave_types_list' %}">Back to leave
+                    types</a>
+                <a class="btn btn-outline-secondary"
+                   href="{% url 'staff:index' %}">Staff menu</a>
+            </div>
+        </div>
+
+        {% if not active_company %}
+            <div class="alert alert-warning">Active company is not selected.
+            </div>
+        {% else %}
+            <div class="card shadow-sm">
+                <div class="card-header">
+                    <strong>
+                        {% if object %}Edit leave type{% else %}Add leave
+                            type{% endif %}
+                    </strong>
+                </div>
+
+                <div class="card-body">
+                    <form method="post">
+                        {% csrf_token %}
+
+                        {% if form.non_field_errors %}
+                            <div class="alert alert-danger py-2">
+                                {{ form.non_field_errors }}
+                            </div>
+                        {% endif %}
+
+                        <div class="mb-3">
+                            <label class="form-label"
+                                   for="{{ form.leave_code.id_for_label }}">Leave
+                                code</label>
+                            {{ form.leave_code }}
+                            {% if form.leave_code.errors %}
+                                <div class="text-danger small mt-1">{{ form.leave_code.errors }}</div>
+                            {% endif %}
+                            <div class="form-text">
+                                Exactly 2 uppercase Latin letters. Example: SL,
+                                AL, UL, OL, BT, UV.
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label"
+                                   for="{{ form.name.id_for_label }}">Name</label>
+                            {{ form.name }}
+                            {% if form.name.errors %}
+                                <div class="text-danger small mt-1">{{ form.name.errors }}</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label"
+                                   for="{{ form.description.id_for_label }}">Description</label>
+                            {{ form.description }}
+                            {% if form.description.errors %}
+                                <div class="text-danger small mt-1">{{ form.description.errors }}</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="form-check mb-3">
+                            {{ form.is_active }}
+                            <label class="form-check-label"
+                                   for="{{ form.is_active.id_for_label }}">
+                                Active
+                            </label>
+                            {% if form.is_active.errors %}
+                                <div class="text-danger small mt-1">{{ form.is_active.errors }}</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="d-flex justify-content-end gap-2">
+                            <a class="btn btn-outline-secondary"
+                               href="{% url 'staff:leave_types_list' %}">
+                                Cancel
+                            </a>
+                            <button type="submit" class="btn btn-primary">
+                                Save
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+{% endblock %}

@@ -696,6 +696,15 @@ class StaffAbsence(models.Model):
         related_name="absences",
     )
 
+    leave_type = models.ForeignKey(
+        LeaveType,
+        on_delete=models.PROTECT,
+        related_name="absences",
+        blank=True,
+        null=True,
+        help_text="Structured leave / non-duty type from LeaveType directory.",
+    )
+
     absence_type = models.CharField(
         max_length=24,
         choices=ABSENCE_TYPE_CHOICES,
@@ -725,6 +734,15 @@ class StaffAbsence(models.Model):
         if self.date_to < self.date_from:
             raise ValidationError(
                 {"date_to": "Absence end date cannot be earlier than start date."}
+            )
+
+        if (
+            self.leave_type_id
+            and self.company_id
+            and self.leave_type.company_id != self.company_id
+        ):
+            raise ValidationError(
+                {"leave_type": "Leave type company must match absence company."}
             )
 
     def save(self, *args, **kwargs):

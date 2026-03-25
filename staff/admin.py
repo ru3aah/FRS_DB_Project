@@ -206,13 +206,14 @@ class StaffAbsenceAdmin(admin.ModelAdmin):
         "absence_id",
         "company",
         "person",
+        "leave_type",
         "absence_type",
         "date_from",
         "date_to",
         "is_active",
         "created_at",
     )
-    list_filter = ("company", "absence_type", "is_active")
+    list_filter = ("company", "leave_type", "absence_type", "is_active")
     search_fields = (
         "person__first_name",
         "person__second_name",
@@ -221,7 +222,7 @@ class StaffAbsenceAdmin(admin.ModelAdmin):
     )
     ordering = ("company", "-created_at")
     readonly_fields = ("created_at",)
-    autocomplete_fields = ("person",)
+    autocomplete_fields = ("person", "leave_type")
     inlines = [StaffAbsenceDocumentInline]
 
 

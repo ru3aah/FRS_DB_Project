@@ -29,10 +29,12 @@ from .forms import (
     evaluate_shift_pattern,
 )
 from .models import (
+    LeaveType,
     Position,
     Shift,
     ShiftMembership,
     ShiftType,
+    StaffAbsence,
     StaffingAssignment,
     StaffingPlan,
     StaffingPlanItem,
@@ -375,6 +377,20 @@ def _is_absent(
     return False
 
 
+def _get_leave_code_for_day(
+    absences_by_person: dict[int, list[dict]], person_id: int, day: date
+) -> str | None:
+    for item in absences_by_person.get(person_id, []):
+        date_from = item.get("date_from")
+        date_to = item.get("date_to")
+        leave_code = item.get("leave_code")
+
+        if date_from and date_to and date_from <= day <= date_to and leave_code:
+            return leave_code
+
+    return None
+
+
 class StaffRosterView(LoginRequiredMixin, ActiveCompanyMixin, TemplateView):
     template_name = "staff/roster.html"
 
@@ -423,7 +439,6 @@ class StaffRosterView(LoginRequiredMixin, ActiveCompanyMixin, TemplateView):
             d += timedelta(days=1)
         ctx["days"] = days
 
-        # 2-letter weekday labels from current locale/settings
         weekend_days = set(getattr(settings, "WEEKEND_DAYS", (5, 6)))
 
         day_headers = []
@@ -479,7 +494,29 @@ class StaffRosterView(LoginRequiredMixin, ActiveCompanyMixin, TemplateView):
             if m.person_id not in person_to_membership:
                 person_to_membership[m.person_id] = m
 
-        # top shift line: one code per day based on shift package anchors
+        absences = list(
+            StaffAbsence.objects.filter(
+                company=company,
+                is_active=True,
+                date_from__lte=month_end,
+                date_to__gte=month_start,
+            ).select_related("person", "leave_type")
+        )
+        absences_by_person: dict[int, list[dict]] = {}
+        for ab in absences:
+            absences_by_person.setdefault(ab.person_id, []).append(
+                {
+                    "date_from": ab.date_from,
+                    "date_to": ab.date_to,
+                    "leave_code": (
+                        ab.leave_type.leave_code
+                        if ab.leave_type_id and ab.leave_type
+                        else None
+                    ),
+                    "absence_type": ab.absence_type,
+                }
+            )
+
         shifts = list(
             Shift.objects.filter(company=company, is_active=True)
             .select_related("shift_type")
@@ -512,6 +549,13 @@ class StaffRosterView(LoginRequiredMixin, ActiveCompanyMixin, TemplateView):
 
                 if end_day is not None and day > end_day:
                     cells.append("--")
+                    continue
+
+                leave_code = _get_leave_code_for_day(
+                    absences_by_person, person.person_id, day
+                )
+                if leave_code:
+                    cells.append(leave_code)
                     continue
 
                 if shift is None or shift.anchor_date is None:
@@ -547,6 +591,7 @@ class StaffRosterView(LoginRequiredMixin, ActiveCompanyMixin, TemplateView):
 
         ctx["shift_groups"] = shift_groups
         ctx["day_to_shift_codes"] = day_to_shift_codes
+        ctx["absences_by_person"] = absences_by_person
         return ctx
 
 
@@ -1872,3 +1917,93 @@ class AssignmentReleaseAllView(LoginRequiredMixin, ActiveCompanyMixin, View):
             messages.info(request, "No assignments required changes.")
 
         return redirect("staff:assignments")
+
+
+class LeaveTypeListView(LoginRequiredMixin, ActiveCompanyMixin, ListView):
+    model = LeaveType
+    template_name = "staff/leave_types_list.html"
+    context_object_name = "leave_types"
+    paginate_by = 10
+
+    def get_queryset(self):
+        company = self.get_active_company()
+        if company is None:
+            return LeaveType.objects.none()
+
+        qs = LeaveType.objects.filter(company=company)
+        if self.request.GET.get("show") != "all":
+            qs = qs.filter(is_active=True)
+
+        return qs.order_by("name")
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["active_company"] = self.get_active_company()
+
+        show_all = self.request.GET.get("show") == "all"
+        ctx["show_all"] = show_all
+
+        if show_all:
+            ctx["toggle_filter_url"] = reverse("staff:leave_types_list")
+            ctx["toggle_filter_label"] = "Show only active"
+        else:
+            ctx["toggle_filter_url"] = f"{reverse('staff:leave_types_list')}?show=all"
+            ctx["toggle_filter_label"] = "Show all"
+
+        return ctx
+
+
+class LeaveTypeCreateView(LoginRequiredMixin, ActiveCompanyMixin, CreateView):
+    model = LeaveType
+    template_name = "staff/leave_types_form.html"
+    fields = ["leave_code", "name", "description", "is_active"]
+    success_url = reverse_lazy("staff:leave_types_list")
+
+    def form_valid(self, form):
+        company = self.get_active_company()
+        if company is None:
+            messages.error(self.request, "Active company is not selected.")
+            return redirect("staff:leave_types_list")
+
+        form.instance.company = company
+        messages.success(self.request, "Leave type created.")
+        return super().form_valid(form)
+
+
+class LeaveTypeUpdateView(LoginRequiredMixin, ActiveCompanyMixin, UpdateView):
+    model = LeaveType
+    template_name = "staff/leave_types_form.html"
+    fields = ["leave_code", "name", "description", "is_active"]
+    success_url = reverse_lazy("staff:leave_types_list")
+
+    def get_queryset(self):
+        company = self.get_active_company()
+        if company is None:
+            return LeaveType.objects.none()
+        return LeaveType.objects.filter(company=company)
+
+    def form_valid(self, form):
+        messages.success(self.request, "Leave type updated.")
+        return super().form_valid(form)
+
+
+class LeaveTypeDeactivateView(LoginRequiredMixin, ActiveCompanyMixin, View):
+    def post(self, request: HttpRequest, pk: int) -> HttpResponse:
+        company = self.get_active_company()
+        if company is None:
+            messages.error(request, "Active company is not selected.")
+            return redirect("staff:leave_types_list")
+
+        obj = get_object_or_404(LeaveType, pk=pk, company=company)
+
+        if obj.is_active:
+            obj.is_active = False
+            obj.save(update_fields=["is_active"])
+            messages.success(request, "Leave type deactivated.")
+        else:
+            messages.info(request, "Leave type is already inactive.")
+
+        if request.GET.get("show") == "all":
+            return redirect(f"{reverse('staff:leave_types_list')}?show=all")
+
+        return redirect("staff:leave_types_list")

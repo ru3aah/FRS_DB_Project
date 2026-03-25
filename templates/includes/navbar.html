@@ -33,6 +33,7 @@
                  aria-current="page"
                  href="{% url 'admin:index' %}">Admin</a>
           </li>
+
           <li class="nav-item dropdown">
               <a class="nav-link dropdown-toggle"
                  href="#"
@@ -42,20 +43,81 @@
                  aria-expanded="false">
                   HR
               </a>
-              <ul class="dropdown-menu dropdown-menu-dark bg-primary">
+
+              <ul class="dropdown-menu dropdown-menu-dark bg-primary"
+                  aria-labelledby="hrDropdown">
                   <li>
               <a class="dropdown-item" href="{% url 'persons:index' %}">
                 Persons
               </a>
             </li>
+
             <li>
               <a class="dropdown-item" href="{% url 'staff:index' %}">
                 Staff
               </a>
             </li>
+
+                  <li>
+                      <hr class="dropdown-divider">
+                  </li>
+
+                  <li>
+                      <a class="dropdown-item"
+                         href="{% url 'staff:positions_list' %}">
+                          Positions
+                      </a>
+                  </li>
+
+                  <li>
+                      <a class="dropdown-item"
+                         href="{% url 'staff:leave_types_list' %}">
+                          Leave types
+                      </a>
+                  </li>
+
+                  <li>
+                      <a class="dropdown-item"
+                         href="{% url 'staff:staffing_plans_list' %}">
+                          Staffing plans
+                      </a>
+                  </li>
+
+                  <li>
+                      <a class="dropdown-item"
+                         href="{% url 'staff:assignments' %}">
+                          Assignments
+                      </a>
+                  </li>
+
+                  <li>
+                      <a class="dropdown-item"
+                         href="{% url 'staff:shift_types_list' %}">
+                          Shift types
+                      </a>
+                  </li>
+
+                  <li>
+                      <a class="dropdown-item"
+                         href="{% url 'staff:shifts_list' %}">
+                          Shifts
+                      </a>
+                  </li>
+
+                  <li>
+                      <a class="dropdown-item"
+                         href="{% url 'staff:staff_members' %}">
+                          Staff distribution
+                      </a>
+                  </li>
+
+                  <li>
+                      <a class="dropdown-item" href="{% url 'staff:roster' %}">
+                          Roster
+                      </a>
+                  </li>
           </ul>
         </li>
-
       </ul>
 
       {# Right side #}
@@ -84,14 +146,14 @@
             </button>
           </form>
 
-          {# Company (ONLY if logo exists) #}
-
+            {# Company #}
             <div class="d-flex align-items-center gap-2">
                 {% if company %}
                     <span class="text-light small">
-                        {{ company.name_short }}
-                    </span>
+                {{ company.name_short }}
+              </span>
                 {% endif %}
+
                 {% if company.logo %}
                     <img
                             src="{{ company.logo.url }}"
@@ -103,8 +165,9 @@
                     >
                 {% endif %}
             </div>
-        {% endif %}
+
         </div>
+      {% endif %}
     </div>
   </div>
 </nav>
