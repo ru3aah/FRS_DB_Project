@@ -89,9 +89,8 @@
                                 class="roster-col-position frs-sticky-left-4">
                                 Position
                             </th>
-
                             {% for header in day_headers %}
-                                <th class="roster-day-col">
+                                <th class="roster-day-col {% if header.is_weekend %}frs-weekend{% endif %}">
                                     {{ header.weekday_short }}
                                 </th>
                             {% endfor %}
@@ -99,7 +98,7 @@
 
                         <tr class="frs-sticky-top-2">
                             {% for header in day_headers %}
-                                <th class="roster-day-col">
+                                <th class="roster-day-col {% if header.is_weekend %}frs-weekend{% endif %}">
                                     {{ header.day_num }}
                                 </th>
                             {% endfor %}

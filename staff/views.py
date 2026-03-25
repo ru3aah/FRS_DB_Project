@@ -431,6 +431,7 @@ class StaffRosterView(LoginRequiredMixin, ActiveCompanyMixin, TemplateView):
                     "date": day,
                     "weekday_short": weekday_short,
                     "day_num": day.day,
+                    "is_weekend": day.weekday() in (5, 6),
                 }
             )
         ctx["day_headers"] = day_headers
