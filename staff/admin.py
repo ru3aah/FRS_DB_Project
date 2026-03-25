@@ -3,6 +3,7 @@ from django.contrib import admin
 from .models import (
     ExtraWork,
     ExtraWorkDocument,
+    LeaveType,
     Position,
     RosterOverride,
     Shift,
@@ -33,6 +34,24 @@ class PositionAdmin(admin.ModelAdmin):
     list_filter = ("company", "type", "is_active")
     search_fields = ("name_long", "name_short", "roster_code")
     ordering = ("company", "name_long")
+    list_per_page = 50
+    readonly_fields = ("created_at", "updated_at")
+
+
+@admin.register(LeaveType)
+class LeaveTypeAdmin(admin.ModelAdmin):
+    list_display = (
+        "leave_type_id",
+        "company",
+        "leave_code",
+        "name",
+        "description",
+        "is_active",
+        "updated_at",
+    )
+    list_filter = ("company", "is_active")
+    search_fields = ("leave_code", "name", "description")
+    ordering = ("company", "name")
     list_per_page = 50
     readonly_fields = ("created_at", "updated_at")
 

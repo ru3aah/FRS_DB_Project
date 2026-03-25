@@ -110,6 +110,91 @@ class Position(models.Model):
         return self.name_long
 
 
+class LeaveType(models.Model):
+    """
+    Reference table for leave / non-duty status types used in roster.
+    Examples:
+      SL = Sick leave
+      AL = Annual leave
+      UL = Unpaid leave
+      OL = Other authorized leave
+      BT = Business trip
+      UV = Unauthorized leave
+    """
+
+    leave_type_id = models.BigAutoField(primary_key=True)
+
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name="staff_leave_types",
+        null=True,
+        blank=True,
+        help_text="Company this leave type belongs to",
+    )
+
+    leave_code = models.CharField(
+        max_length=2,
+        help_text="Two-letter leave code, e.g. SL, AL, UL, OL, BT, UV.",
+    )
+
+    name = models.CharField(
+        max_length=100,
+        help_text="Full leave type name.",
+    )
+
+    description = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        help_text="Optional explanation / note shown in UI.",
+    )
+
+    is_active = models.BooleanField(
+        default=True,
+        help_text="Whether this leave type is active and selectable.",
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "staff_leave_types"
+        ordering = ["name"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["company", "leave_code"],
+                name="uq_staff_leave_type_company_code",
+            ),
+            models.UniqueConstraint(
+                fields=["company", "name"],
+                name="uq_staff_leave_type_company_name",
+            ),
+        ]
+
+    def clean(self):
+        super().clean()
+
+        self.leave_code = (self.leave_code or "").strip().upper()
+
+        if not re.fullmatch(r"[A-Z]{2}", self.leave_code):
+            raise ValidationError(
+                {
+                    "leave_code": (
+                        "Leave code must contain exactly 2 uppercase Latin letters."
+                    )
+                }
+            )
+
+    def save(self, *args, **kwargs):
+        self.leave_code = (self.leave_code or "").strip().upper()
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
+    def __str__(self) -> str:
+        return f"{self.leave_code} | {self.name}"
+
+
 class ShiftType(models.Model):
     """
     Shift pattern / rotation type.
