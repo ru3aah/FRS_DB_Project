@@ -129,3 +129,7 @@ MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+WEEKEND_DAYS = tuple(
+    int(x.strip()) for x in os.getenv("WEEKEND_DAYS", "5,6").split(",") if x.strip()
+)

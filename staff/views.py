@@ -4,6 +4,7 @@ from calendar import monthrange
 from datetime import date, datetime, timedelta
 from urllib.parse import urlencode
 
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import ValidationError
@@ -423,6 +424,8 @@ class StaffRosterView(LoginRequiredMixin, ActiveCompanyMixin, TemplateView):
         ctx["days"] = days
 
         # 2-letter weekday labels from current locale/settings
+        weekend_days = set(getattr(settings, "WEEKEND_DAYS", (5, 6)))
+
         day_headers = []
         for day in days:
             weekday_short = day.strftime("%a")[:2]
@@ -431,7 +434,7 @@ class StaffRosterView(LoginRequiredMixin, ActiveCompanyMixin, TemplateView):
                     "date": day,
                     "weekday_short": weekday_short,
                     "day_num": day.day,
-                    "is_weekend": day.weekday() in (5, 6),
+                    "is_weekend": day.weekday() in weekend_days,
                 }
             )
         ctx["day_headers"] = day_headers
