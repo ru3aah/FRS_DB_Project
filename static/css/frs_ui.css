@@ -4,70 +4,70 @@
 
 /* Nested dropdown positioning */
 .dropdown-submenu {
-    position: relative;
+  position: relative;
 }
 
 .dropdown-submenu > .dropdown-menu {
-    top: 0;
-    left: 100%;
-    margin-top: -0.25rem;
-    margin-left: 0.1rem;
+  top: 0;
+  left: 100%;
+  margin-top: -0.25rem;
+  margin-left: 0.1rem;
 }
 
 /* Better dropdown sizing */
 .navbar .dropdown-menu {
-    min-width: 14rem;
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.18);
-    padding-top: 0.35rem;
-    padding-bottom: 0.35rem;
+  min-width: 14rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.18);
+  padding-top: 0.35rem;
+  padding-bottom: 0.35rem;
 }
 
 .navbar .dropdown-item {
-    font-size: 0.95rem;
-    padding: 0.45rem 0.9rem;
-    white-space: nowrap;
+  font-size: 0.95rem;
+  padding: 0.45rem 0.9rem;
+  white-space: nowrap;
 }
 
 .navbar .dropdown-item:hover,
 .navbar .dropdown-item:focus {
-    background-color: rgba(255, 255, 255, 0.12);
+  background-color: rgba(255, 255, 255, 0.12);
 }
 
 /* Submenu toggle arrow */
 .dropdown-submenu > .dropdown-toggle {
-    position: relative;
-    padding-right: 2rem;
+  position: relative;
+  padding-right: 2rem;
 }
 
 .dropdown-submenu > .dropdown-toggle::after {
-    content: "▸";
-    position: absolute;
-    right: 0.9rem;
-    top: 50%;
-    transform: translateY(-50%);
-    font-size: 0.8rem;
-    opacity: 0.9;
+  content: "▸";
+  position: absolute;
+  right: 0.9rem;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 0.8rem;
+  opacity: 0.9;
 }
 
 /* When submenu is open */
 .dropdown-submenu.show > .dropdown-toggle,
 .dropdown-submenu > .dropdown-toggle[aria-expanded="true"] {
-    background-color: rgba(255, 255, 255, 0.12);
+  background-color: rgba(255, 255, 255, 0.12);
 }
 
 /* Slightly cleaner divider on dark dropdowns */
 .navbar .dropdown-divider {
-    border-top-color: rgba(255, 255, 255, 0.18);
-    margin: 0.35rem 0;
+  border-top-color: rgba(255, 255, 255, 0.18);
+  margin: 0.35rem 0;
 }
 
 /* Compact navbar text blocks */
 .navbar .text-light.small {
-    line-height: 1.15;
+  line-height: 1.15;
 }
 
 /* Optional utility muted text */
 .frs-text-muted {
-    color: #6c757d;
+  color: #6c757d;
 }

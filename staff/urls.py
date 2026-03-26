@@ -7,6 +7,7 @@ from .views import (
     AssignmentReleaseAllView,
     AssignmentReleaseView,
     AssignmentsView,
+    LeaveListView,
     LeaveTypeCreateView,
     LeaveTypeDeactivateView,
     LeaveTypeListView,
@@ -34,11 +35,6 @@ from .views import (
     StaffingPlanUpdateView,
     StaffRosterView,
     StaffShiftMembershipView,
-    LeaveListView,
-    LeaveTypeListView,
-    LeaveTypeCreateView,
-    LeaveTypeUpdateView,
-    LeaveTypeDeactivateView,
 )
 
 app_name = "staff"
