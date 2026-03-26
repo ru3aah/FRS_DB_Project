@@ -159,13 +159,6 @@ class Position(models.Model):
 class LeaveType(models.Model):
     """
     Reference table for leave / non-duty status types used in roster.
-    Examples:
-      SL = Sick leave
-      AL = Annual leave
-      UL = Unpaid leave
-      OL = Other authorized leave
-      BT = Business trip
-      UV = Unauthorized leave
     """
 
     leave_type_id = models.BigAutoField(primary_key=True)
@@ -181,7 +174,7 @@ class LeaveType(models.Model):
 
     leave_code = models.CharField(
         max_length=2,
-        help_text="Two-letter leave code, e.g. SL, AL, UL, OL, BT, UV.",
+        help_text="Two-letter leave code.",
     )
 
     name = models.CharField(
@@ -244,10 +237,6 @@ class LeaveType(models.Model):
 class ShiftType(models.Model):
     """
     Shift pattern / rotation type.
-    Examples:
-      A = 7/14
-      B = 28/28
-      C = 2/2
     """
 
     shift_type_id = models.BigAutoField(primary_key=True)
@@ -720,14 +709,6 @@ class StaffAbsence(models.Model):
     Temporary absence from work.
     """
 
-    ABSENCE_TYPE_CHOICES = (
-        ("sick", "Sick leave"),
-        ("annual_leave", "Annual paid leave"),
-        ("unpaid_leave", "Unpaid leave"),
-        ("absent_without_leave", "Absent without leave"),
-        ("other", "Other"),
-    )
-
     absence_id = models.BigAutoField(primary_key=True)
 
     company = models.ForeignKey(
@@ -746,15 +727,7 @@ class StaffAbsence(models.Model):
         LeaveType,
         on_delete=models.PROTECT,
         related_name="absences",
-        blank=True,
-        null=True,
         help_text="Structured leave / non-duty type from LeaveType directory.",
-    )
-
-    absence_type = models.CharField(
-        max_length=24,
-        choices=ABSENCE_TYPE_CHOICES,
-        default="other",
     )
 
     date_from = models.DateField()
@@ -839,21 +812,19 @@ class TemporaryCover(models.Model):
         related_name="temporary_covers",
     )
 
+    absence = models.ForeignKey(
+        StaffAbsence,
+        on_delete=models.PROTECT,
+        related_name="temporary_covers",
+        help_text="Leave/absence that this cover is closing.",
+    )
+
     day = models.DateField(db_index=True)
 
     staffing_plan_item = models.ForeignKey(
         StaffingPlanItem,
         on_delete=models.CASCADE,
         related_name="temporary_covers",
-    )
-
-    absent_person = models.ForeignKey(
-        Person,
-        on_delete=models.PROTECT,
-        related_name="temporary_covers_as_absent",
-        blank=True,
-        null=True,
-        help_text="Person who is absent / replaced.",
     )
 
     covering_person = models.ForeignKey(
@@ -880,6 +851,11 @@ class TemporaryCover(models.Model):
     def clean(self):
         super().clean()
 
+        if not self.absence_id:
+            raise ValidationError(
+                {"absence": "Temporary cover must be linked to an existing absence."}
+            )
+
         if (
             self.staffing_plan_item_id
             and self.company_id
@@ -889,10 +865,41 @@ class TemporaryCover(models.Model):
                 {"company": "Temporary cover company must match staffing plan company."}
             )
 
-        if self.absent_person_id and self.absent_person_id == self.covering_person_id:
+        if (
+            self.absence_id
+            and self.company_id
+            and self.absence.company_id != self.company_id
+        ):
+            raise ValidationError(
+                {"absence": "Absence company must match temporary cover company."}
+            )
+
+        if self.day and (
+            self.day < self.absence.date_from or self.day > self.absence.date_to
+        ):
+            raise ValidationError(
+                {"day": "Temporary cover day must be inside linked absence period."}
+            )
+
+        if self.absence.person_id == self.covering_person_id:
             raise ValidationError(
                 {
                     "covering_person": "Covering person cannot be the same as absent person."
+                }
+            )
+
+        if _person_has_nonbase_day_override(
+            company_id=self.company_id,
+            person_id=self.covering_person_id,
+            day=self.day,
+            exclude_temporary_cover_id=self.pk,
+        ):
+            raise ValidationError(
+                {
+                    "covering_person": (
+                        "This person already has another day override on this day "
+                        "(temporary cover, extra work, or leave)."
+                    )
                 }
             )
 
@@ -901,7 +908,7 @@ class TemporaryCover(models.Model):
         return super().save(*args, **kwargs)
 
     def __str__(self) -> str:
-        return f"{self.day} | {self.staffing_plan_item} -> {self.covering_person}"
+        return f"{self.day} | {self.covering_person} covers {self.absence.person}"
 
 
 class TemporaryCoverDocument(models.Model):
@@ -988,6 +995,21 @@ class ExtraWork(models.Model):
         ):
             raise ValidationError(
                 {"company": "Extra work company must match staffing plan company."}
+            )
+
+        if _person_has_nonbase_day_override(
+            company_id=self.company_id,
+            person_id=self.person_id,
+            day=self.day,
+            exclude_extra_work_id=self.pk,
+        ):
+            raise ValidationError(
+                {
+                    "person": (
+                        "This person already has another day override on this day "
+                        "(temporary cover, extra work, or leave)."
+                    )
+                }
             )
 
     def save(self, *args, **kwargs):

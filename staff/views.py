@@ -29,6 +29,7 @@ from .forms import (
     evaluate_shift_pattern,
 )
 from .models import (
+    ExtraWork,
     LeaveType,
     Position,
     Shift,
@@ -38,6 +39,7 @@ from .models import (
     StaffingAssignment,
     StaffingPlan,
     StaffingPlanItem,
+    TemporaryCover,
 )
 
 
@@ -391,6 +393,52 @@ def _get_leave_code_for_day(
     return None
 
 
+def _get_work_override_code_for_day(
+    *,
+    company_id: int | None,
+    person_id: int | None,
+    day: date | None,
+) -> str | None:
+    if not company_id or not person_id or not day:
+        return None
+
+    temp_cover = (
+        TemporaryCover.objects.filter(
+            company_id=company_id,
+            day=day,
+            covering_person_id=person_id,
+            is_active=True,
+        )
+        .select_related("staffing_plan_item__position")
+        .first()
+    )
+    if (
+        temp_cover
+        and temp_cover.staffing_plan_item
+        and temp_cover.staffing_plan_item.position
+    ):
+        return temp_cover.staffing_plan_item.position.roster_code or None
+
+    extra_work = (
+        ExtraWork.objects.filter(
+            company_id=company_id,
+            day=day,
+            person_id=person_id,
+            is_active=True,
+        )
+        .select_related("staffing_plan_item__position")
+        .first()
+    )
+    if (
+        extra_work
+        and extra_work.staffing_plan_item
+        and extra_work.staffing_plan_item.position
+    ):
+        return extra_work.staffing_plan_item.position.roster_code or None
+
+    return None
+
+
 class StaffRosterView(LoginRequiredMixin, ActiveCompanyMixin, TemplateView):
     template_name = "staff/roster.html"
 
@@ -513,7 +561,6 @@ class StaffRosterView(LoginRequiredMixin, ActiveCompanyMixin, TemplateView):
                         if ab.leave_type_id and ab.leave_type
                         else None
                     ),
-                    "absence_type": ab.absence_type,
                 }
             )
 
@@ -556,6 +603,15 @@ class StaffRosterView(LoginRequiredMixin, ActiveCompanyMixin, TemplateView):
                 )
                 if leave_code:
                     cells.append(leave_code)
+                    continue
+
+                work_override_code = _get_work_override_code_for_day(
+                    company_id=company.pk,
+                    person_id=person.person_id,
+                    day=day,
+                )
+                if work_override_code:
+                    cells.append(work_override_code)
                     continue
 
                 if shift is None or shift.anchor_date is None:
@@ -1917,6 +1973,44 @@ class AssignmentReleaseAllView(LoginRequiredMixin, ActiveCompanyMixin, View):
             messages.info(request, "No assignments required changes.")
 
         return redirect("staff:assignments")
+
+
+class LeaveListView(LoginRequiredMixin, ActiveCompanyMixin, ListView):
+    model = StaffAbsence
+    template_name = "staff/leaves_list.html"
+    context_object_name = "leaves"
+    paginate_by = 10
+
+    def get_queryset(self):
+        company = self.get_active_company()
+        if company is None:
+            return StaffAbsence.objects.none()
+
+        qs = StaffAbsence.objects.filter(company=company).select_related(
+            "person",
+            "leave_type",
+        )
+
+        if self.request.GET.get("show") != "all":
+            qs = qs.filter(is_active=True)
+
+        return qs.order_by("-date_from", "-created_at")
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["active_company"] = self.get_active_company()
+
+        show_all = self.request.GET.get("show") == "all"
+        ctx["show_all"] = show_all
+
+        if show_all:
+            ctx["toggle_filter_url"] = reverse("staff:leaves_list")
+            ctx["toggle_filter_label"] = "Show only active"
+        else:
+            ctx["toggle_filter_url"] = f"{reverse('staff:leaves_list')}?show=all"
+            ctx["toggle_filter_label"] = "Show all"
+
+        return ctx
 
 
 class LeaveTypeListView(LoginRequiredMixin, ActiveCompanyMixin, ListView):

@@ -8,6 +8,7 @@
   <title>{% block title %}FRS | Base{% endblock %}</title>
 
   <link rel="stylesheet" href="{% static 'bootstrap/css/bootstrap.min.css' %}">
+  <link rel="stylesheet" href="{% static 'css/frs_ui.css' %}">
 </head>
 
 <body>
@@ -19,6 +20,9 @@
 
   <script src="https://unpkg.com/htmx.org@1.9.12"></script>
   <script src="{% static 'bootstrap/js/bootstrap.bundle.min.js' %}"></script>
+
+  {# >>> НАШ JS <<< #}
+  <script src="{% static 'js/frs_ui.js' %}"></script>
 
   {% if messages %}
     <div class="modal fade"

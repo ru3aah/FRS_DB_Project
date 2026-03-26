@@ -207,13 +207,12 @@ class StaffAbsenceAdmin(admin.ModelAdmin):
         "company",
         "person",
         "leave_type",
-        "absence_type",
         "date_from",
         "date_to",
         "is_active",
         "created_at",
     )
-    list_filter = ("company", "leave_type", "absence_type", "is_active")
+    list_filter = ("company", "leave_type", "is_active")
     search_fields = (
         "person__first_name",
         "person__second_name",
@@ -239,8 +238,7 @@ class TemporaryCoverAdmin(admin.ModelAdmin):
         "temporary_cover_id",
         "company",
         "day",
-        "staffing_plan_item",
-        "absent_person",
+        "absence",
         "covering_person",
         "is_active",
         "created_at",
@@ -248,16 +246,14 @@ class TemporaryCoverAdmin(admin.ModelAdmin):
     list_filter = ("company", "day", "is_active")
     search_fields = (
         "covering_person__first_name",
-        "covering_person__second_name",
         "covering_person__family_name",
-        "absent_person__first_name",
-        "absent_person__second_name",
-        "absent_person__family_name",
+        "absence__person__first_name",
+        "absence__person__family_name",
         "note",
     )
     ordering = ("company", "-created_at")
     readonly_fields = ("created_at",)
-    autocomplete_fields = ("staffing_plan_item", "absent_person", "covering_person")
+    autocomplete_fields = ("absence", "staffing_plan_item", "covering_person")
     inlines = [TemporaryCoverDocumentInline]
 
 

@@ -1,98 +1,73 @@
-.frs-scroll-panel {
-  overflow: auto;
-  max-width: 100%;
-  max-height: 78vh;
-  border: 1px solid #dee2e6;
-  background: #fff;
+/* =========================
+   Global reusable UI styles
+   ========================= */
+
+/* Nested dropdown positioning */
+.dropdown-submenu {
+    position: relative;
 }
 
-.frs-table-fixed {
-  table-layout: fixed;
-  border-collapse: separate;
-  border-spacing: 0;
-  width: max-content;
-  min-width: 100%;
-  margin-bottom: 0;
+.dropdown-submenu > .dropdown-menu {
+    top: 0;
+    left: 100%;
+    margin-top: -0.25rem;
+    margin-left: 0.1rem;
 }
 
-.frs-table-fixed th,
-.frs-table-fixed td {
-  border-right: 1px solid #dee2e6;
-  border-bottom: 1px solid #dee2e6;
-  background: #fff;
+/* Better dropdown sizing */
+.navbar .dropdown-menu {
+    min-width: 14rem;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.18);
+    padding-top: 0.35rem;
+    padding-bottom: 0.35rem;
 }
 
-.frs-table-fixed thead th {
-  position: sticky;
-  z-index: 20;
-  background: #f8f9fa;
+.navbar .dropdown-item {
+    font-size: 0.95rem;
+    padding: 0.45rem 0.9rem;
+    white-space: nowrap;
 }
 
-.frs-sticky-top-1 th {
-  top: 0;
+.navbar .dropdown-item:hover,
+.navbar .dropdown-item:focus {
+    background-color: rgba(255, 255, 255, 0.12);
 }
 
-.frs-sticky-top-2 th {
-  top: 32px;
+/* Submenu toggle arrow */
+.dropdown-submenu > .dropdown-toggle {
+    position: relative;
+    padding-right: 2rem;
 }
 
-.frs-sticky-top-3 th {
-  top: 64px;
+.dropdown-submenu > .dropdown-toggle::after {
+    content: "▸";
+    position: absolute;
+    right: 0.9rem;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 0.8rem;
+    opacity: 0.9;
 }
 
-.frs-sticky-left-1,
-.frs-sticky-left-2,
-.frs-sticky-left-3,
-.frs-sticky-left-4 {
-  position: sticky;
-  z-index: 25;
-  background: #fff;
+/* When submenu is open */
+.dropdown-submenu.show > .dropdown-toggle,
+.dropdown-submenu > .dropdown-toggle[aria-expanded="true"] {
+    background-color: rgba(255, 255, 255, 0.12);
 }
 
-.frs-table-fixed thead .frs-sticky-left-1,
-.frs-table-fixed thead .frs-sticky-left-2,
-.frs-table-fixed thead .frs-sticky-left-3,
-.frs-table-fixed thead .frs-sticky-left-4 {
-  z-index: 35;
-  background: #f8f9fa;
+/* Slightly cleaner divider on dark dropdowns */
+.navbar .dropdown-divider {
+    border-top-color: rgba(255, 255, 255, 0.18);
+    margin: 0.35rem 0;
 }
 
-.frs-sticky-left-1 {
-  left: 0;
+/* Compact navbar text blocks */
+.navbar .text-light.small {
+    line-height: 1.15;
 }
 
-.frs-sticky-left-2 {
-  left: 60px;
-}
-
-.frs-sticky-left-3 {
-  left: 280px;
-}
-
-.frs-sticky-left-4 {
-  left: 370px;
-}
-
-.frs-group-row td {
-  position: sticky;
-  left: 0;
-  z-index: 15;
-  background: #e9ecef !important;
-}
-
+/* Optional utility muted text */
 .frs-text-muted {
-  color: #6c757d;
-}
-
-.frs-code-cell {
-  display: inline-block;
-  width: 100%;
-  text-align: center;
-  font-size: 0.72rem;
-  line-height: 1.1;
-}
-
-.frs-weekend {
-  color: #c82333;
-  font-weight: 600;
+    color: #6c757d;
 }

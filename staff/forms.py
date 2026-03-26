@@ -9,6 +9,7 @@ from django.forms import inlineformset_factory
 from persons.models import Person
 
 from .models import (
+    LeaveType,
     Position,
     RosterOverride,
     Shift,
@@ -537,10 +538,10 @@ class ShiftMembershipForm(forms.ModelForm):
 class StaffAbsenceForm(forms.ModelForm):
     class Meta:
         model = StaffAbsence
-        fields = ["person", "absence_type", "date_from", "date_to", "note", "is_active"]
+        fields = ["person", "leave_type", "date_from", "date_to", "note", "is_active"]
         widgets = {
             "person": forms.Select(attrs={"class": "form-select"}),
-            "absence_type": forms.Select(attrs={"class": "form-select"}),
+            "leave_type": forms.Select(attrs={"class": "form-select"}),
             "date_from": forms.DateInput(
                 attrs={"type": "date", "class": "form-control"}
             ),
@@ -554,6 +555,9 @@ class StaffAbsenceForm(forms.ModelForm):
         self.fields["person"].queryset = Person.objects.all().order_by(
             "family_name", "first_name", "second_name"
         )
+        self.fields["leave_type"].queryset = LeaveType.objects.filter(
+            is_active=True
+        ).order_by("name")
 
     def clean(self):
         cleaned = super().clean()
