@@ -71,3 +71,7 @@
 .frs-text-muted {
   color: #6c757d;
 }
+
+.table tbody tr:hover {
+    background-color: rgba(0, 0, 0, 0.03);
+}

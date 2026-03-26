@@ -35,6 +35,12 @@ from .views import (
     StaffingPlanUpdateView,
     StaffRosterView,
     StaffShiftMembershipView,
+    LeaveDetailView,
+    LeaveCreateView,
+    LeaveUpdateView,
+    LeaveDeleteView,
+    LeaveDocumentUploadView,
+    LeaveDocumentDeleteView,
 )
 
 app_name = "staff"
@@ -149,5 +155,23 @@ urlpatterns = [
         LeaveTypeDeactivateView.as_view(),
         name="leave_types_delete",
     ),
+    path("leaves/<int:pk>/", LeaveDetailView.as_view(), name="leaves_detail"),
     path("leaves/", LeaveListView.as_view(), name="leaves_list"),
+    path("leaves/add/", LeaveCreateView.as_view(), name="leaves_add"),
+    path("leaves/<int:pk>/edit/", LeaveUpdateView.as_view(), name="leaves_edit"),
+    path(
+        "leaves/<int:pk>/delete/",
+        LeaveDeleteView.as_view(),
+        name="leaves_delete",
+    ),
+    path(
+        "leaves/<int:pk>/upload/",
+        LeaveDocumentUploadView.as_view(),
+        name="leaves_upload",
+    ),
+    path(
+        "leaves/<int:pk>/documents/<int:doc_pk>/delete/",
+        LeaveDocumentDeleteView.as_view(),
+        name="leave_document_delete",
+    ),
 ]

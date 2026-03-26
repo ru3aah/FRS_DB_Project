@@ -182,6 +182,9 @@ class ShiftTypeForm(forms.ModelForm):
             "existing_obj": None,
         }
 
+        # Это вычисляемое поле, не требуем его от пользователя в POST
+        self.fields["shift_type_short"].required = False
+
         if self.is_create:
             existing_codes = list(
                 ShiftType.objects.filter(company=company).values_list(
@@ -190,6 +193,7 @@ class ShiftTypeForm(forms.ModelForm):
             )
             next_code = _next_free_code_letter(existing_codes)
             self.fields["code_letter"].initial = next_code
+            self.fields["code_letter"].required = False
             self.fields["code_letter"].widget = forms.HiddenInput()
 
         if preview_url:
@@ -227,6 +231,7 @@ class ShiftTypeForm(forms.ModelForm):
         )
         self.pattern_feedback = feedback
 
+        # Ключевой момент: вычисляем pattern серверно и кладём в cleaned_data
         cleaned["shift_type_short"] = feedback["pattern"]
         cleaned["shift_type_name"] = shift_type_name
 

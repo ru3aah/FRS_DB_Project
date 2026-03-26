@@ -36,6 +36,7 @@ from .models import (
     ShiftMembership,
     ShiftType,
     StaffAbsence,
+    StaffAbsenceDocument,
     StaffingAssignment,
     StaffingPlan,
     StaffingPlanItem,
@@ -2013,6 +2014,161 @@ class LeaveListView(LoginRequiredMixin, ActiveCompanyMixin, ListView):
         return ctx
 
 
+class LeaveDetailView(LoginRequiredMixin, ActiveCompanyMixin, TemplateView):
+    template_name = "staff/leave_detail.html"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+
+        company = self.get_active_company()
+        ctx["active_company"] = company
+
+        if company is None:
+            ctx["leave"] = None
+            ctx["documents"] = []
+            return ctx
+
+        leave = get_object_or_404(
+            StaffAbsence.objects.select_related(
+                "person",
+                "leave_type",
+                "company",
+            ).prefetch_related("documents"),
+            pk=self.kwargs["pk"],
+            company=company,
+        )
+
+        ctx["leave"] = leave
+        ctx["documents"] = leave.documents.all().order_by("-uploaded_at")
+        return ctx
+
+
+class LeaveCreateView(LoginRequiredMixin, ActiveCompanyMixin, CreateView):
+    model = StaffAbsence
+    template_name = "staff/leave_form.html"
+    fields = ["person", "leave_type", "date_from", "date_to", "note", "is_active"]
+    success_url = reverse_lazy("staff:leaves_list")
+
+    def get_form(self, form_class=None):
+        form = super().get_form(form_class)
+        company = self.get_active_company()
+
+        if company is not None:
+            if "person" in form.fields:
+                form.fields["person"].queryset = Person.objects.filter(
+                    company=company
+                ).order_by("family_name", "first_name", "second_name")
+
+            if "leave_type" in form.fields:
+                form.fields["leave_type"].queryset = LeaveType.objects.filter(
+                    company=company,
+                    is_active=True,
+                ).order_by("name")
+
+        return form
+
+    def form_valid(self, form):
+        company = self.get_active_company()
+        if company is None:
+            messages.error(self.request, "Active company is not selected.")
+            return redirect("staff:leaves_list")
+
+        form.instance.company = company
+        messages.success(self.request, "Leave created.")
+        return super().form_valid(form)
+
+    def get_success_url(self):
+        return reverse("staff:leaves_detail", kwargs={"pk": self.object.pk})
+
+
+class LeaveUpdateView(LoginRequiredMixin, ActiveCompanyMixin, UpdateView):
+    model = StaffAbsence
+    template_name = "staff/leave_form.html"
+    fields = ["person", "leave_type", "date_from", "date_to", "note", "is_active"]
+    success_url = reverse_lazy("staff:leaves_list")
+
+    def get_queryset(self):
+        company = self.get_active_company()
+        if company is None:
+            return StaffAbsence.objects.none()
+
+        return StaffAbsence.objects.filter(company=company)
+
+    def get_form(self, form_class=None):
+        form = super().get_form(form_class)
+        company = self.get_active_company()
+
+        if company is not None:
+            if "person" in form.fields:
+                form.fields["person"].queryset = Person.objects.filter(
+                    company=company
+                ).order_by("family_name", "first_name", "second_name")
+
+            if "leave_type" in form.fields:
+                form.fields["leave_type"].queryset = LeaveType.objects.filter(
+                    company=company,
+                    is_active=True,
+                ).order_by("name")
+
+        return form
+
+    def form_valid(self, form):
+        messages.success(self.request, "Leave updated.")
+        return super().form_valid(form)
+
+    def get_success_url(self):
+        return reverse("staff:leaves_detail", kwargs={"pk": self.object.pk})
+
+
+class LeaveDeleteView(LoginRequiredMixin, ActiveCompanyMixin, View):
+    def post(self, request: HttpRequest, pk: int) -> HttpResponse:
+        company = self.get_active_company()
+        if company is None:
+            messages.error(request, "Active company is not selected.")
+            return redirect("staff:leaves_list")
+
+        leave = get_object_or_404(
+            StaffAbsence,
+            pk=pk,
+            company=company,
+        )
+
+        leave.delete()
+        messages.success(request, "Leave deleted.")
+
+        return redirect("staff:leaves_list")
+
+
+class LeaveDocumentUploadView(LoginRequiredMixin, ActiveCompanyMixin, View):
+    def post(self, request: HttpRequest, pk: int) -> HttpResponse:
+        company = self.get_active_company()
+        if company is None:
+            messages.error(request, "Active company is not selected.")
+            return redirect("staff:leaves_list")
+
+        leave = get_object_or_404(
+            StaffAbsence,
+            pk=pk,
+            company=company,
+        )
+
+        uploaded_file = request.FILES.get("file")
+        document_name = (request.POST.get("document_name") or "").strip()
+
+        if not uploaded_file:
+            messages.error(request, "Please choose a file.")
+            return redirect("staff:leaves_detail", pk=leave.pk)
+
+        StaffAbsenceDocument.objects.create(
+            absence=leave,
+            document_name=document_name,
+            file=uploaded_file,
+        )
+
+        messages.success(request, "Document uploaded.")
+        return redirect("staff:leaves_detail", pk=leave.pk)
+
+
 class LeaveTypeListView(LoginRequiredMixin, ActiveCompanyMixin, ListView):
     model = LeaveType
     template_name = "staff/leave_types_list.html"
@@ -2101,3 +2257,28 @@ class LeaveTypeDeactivateView(LoginRequiredMixin, ActiveCompanyMixin, View):
             return redirect(f"{reverse('staff:leave_types_list')}?show=all")
 
         return redirect("staff:leave_types_list")
+
+
+class LeaveDocumentDeleteView(LoginRequiredMixin, ActiveCompanyMixin, View):
+    def post(self, request: HttpRequest, pk: int, doc_pk: int) -> HttpResponse:
+        company = self.get_active_company()
+        if company is None:
+            messages.error(request, "Active company is not selected.")
+            return redirect("staff:leaves_list")
+
+        leave = get_object_or_404(
+            StaffAbsence,
+            pk=pk,
+            company=company,
+        )
+
+        document = get_object_or_404(
+            StaffAbsenceDocument,
+            pk=doc_pk,
+            absence=leave,
+        )
+
+        document.delete()
+        messages.success(request, "Document deleted.")
+
+        return redirect("staff:leaves_detail", pk=leave.pk)

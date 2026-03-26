@@ -1,0 +1,40 @@
+<div id="pattern-preview-block" class="mt-3">
+    {% if preview_error %}
+        <div class="alert alert-danger py-2 mb-0">
+            {{ preview_error }}
+        </div>
+    {% else %}
+        <div class="card border-0 bg-light">
+            <div class="card-body py-2 px-3">
+                <div class="small text-muted mb-1">Pattern preview</div>
+                <div class="fw-semibold">
+                    {% if pattern_value %}
+                        {{ pattern_value }}
+                    {% else %}
+                        —
+                    {% endif %}
+                </div>
+
+                {% if duplicate_message %}
+                    <div class="mt-2 alert {% if duplicate_kind == 'active' %}alert-warning{% else %}alert-secondary{% endif %} py-2 mb-0">
+                        {{ duplicate_message }}
+                    </div>
+
+                    {% if duplicate_kind == "inactive" %}
+                        <div class="form-check mt-2">
+                            <input class="form-check-input"
+                                   type="checkbox"
+                                   name="activate_existing"
+                                   value="1"
+                                   id="id_activate_existing">
+                            <label class="form-check-label"
+                                   for="id_activate_existing">
+                                Activate existing matching shift type instead of creating a new one
+                            </label>
+                        </div>
+                    {% endif %}
+                {% endif %}
+            </div>
+        </div>
+    {% endif %}
+</div>

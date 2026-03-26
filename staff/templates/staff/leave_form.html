@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% block title %}FRS DB | Leave{% endblock %}
+
+{% block content %}
+    {% include "includes/navbar.html" %}
+
+    <div class="container mt-4">
+
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+            <div class="d-flex gap-2 flex-wrap">
+                <a class="btn btn-outline-secondary"
+                   href="{% url 'staff:leaves_list' %}">Back to leaves</a>
+
+                {% if object %}
+                    <a class="btn btn-outline-secondary"
+                       href="{% url 'staff:leaves_detail' object.pk %}">
+                        View
+                    </a>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="card shadow-sm">
+            <div class="card-header">
+                <strong>
+                    {% if object %}
+                        Edit leave
+                    {% else %}
+                        Add leave
+                    {% endif %}
+                </strong>
+            </div>
+
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+
+                    {% if form.non_field_errors %}
+                        <div class="alert alert-danger">
+                            {{ form.non_field_errors }}
+                        </div>
+                    {% endif %}
+
+                    <div class="row g-3">
+
+                        <!-- Person -->
+                        <div class="col-md-6">
+                            <label class="form-label">Person</label>
+                            {{ form.person }}
+                            {% if form.person.errors %}
+                                <div class="text-danger small">{{ form.person.errors }}</div>
+                            {% endif %}
+                        </div>
+
+                        <!-- Leave type -->
+                        <div class="col-md-6">
+                            <label class="form-label">Leave type</label>
+                            {{ form.leave_type }}
+                            {% if form.leave_type.errors %}
+                                <div class="text-danger small">{{ form.leave_type.errors }}</div>
+                            {% endif %}
+                        </div>
+
+                        <!-- Date from -->
+                        <div class="col-md-3">
+                            <label class="form-label">Date from</label>
+                            {{ form.date_from }}
+                            {% if form.date_from.errors %}
+                                <div class="text-danger small">{{ form.date_from.errors }}</div>
+                            {% endif %}
+                        </div>
+
+                        <!-- Date to -->
+                        <div class="col-md-3">
+                            <label class="form-label">Date to</label>
+                            {{ form.date_to }}
+                            {% if form.date_to.errors %}
+                                <div class="text-danger small">{{ form.date_to.errors }}</div>
+                            {% endif %}
+                        </div>
+
+                        <!-- Status -->
+                        <div class="col-md-3 d-flex align-items-end">
+                            <div class="form-check">
+                                {{ form.is_active }}
+                                <label class="form-check-label">Active</label>
+                            </div>
+                        </div>
+
+                        <!-- Note -->
+                        <div class="col-12">
+                            <label class="form-label">Note</label>
+                            {{ form.note }}
+                            {% if form.note.errors %}
+                                <div class="text-danger small">{{ form.note.errors }}</div>
+                            {% endif %}
+                        </div>
+
+                    </div>
+
+                    <div class="mt-4 d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            Save
+                        </button>
+
+                        <a href="{% url 'staff:leaves_list' %}"
+                           class="btn btn-outline-secondary">
+                            Cancel
+                        </a>
+                    </div>
+
+                </form>
+            </div>
+        </div>
+
+    </div>
+{% endblock %}
