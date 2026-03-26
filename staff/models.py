@@ -11,6 +11,52 @@ from companies.models import Company
 from persons.models import Person
 
 
+def _person_has_nonbase_day_override(
+    *,
+    company_id: int | None,
+    person_id: int | None,
+    day: date | None,
+    exclude_temporary_cover_id: int | None = None,
+    exclude_extra_work_id: int | None = None,
+) -> bool:
+    if not company_id or not person_id or not day:
+        return False
+
+    temp_cover_qs = TemporaryCover.objects.filter(
+        company_id=company_id,
+        day=day,
+        covering_person_id=person_id,
+        is_active=True,
+    )
+    if exclude_temporary_cover_id:
+        temp_cover_qs = temp_cover_qs.exclude(pk=exclude_temporary_cover_id)
+
+    if temp_cover_qs.exists():
+        return True
+
+    extra_work_qs = ExtraWork.objects.filter(
+        company_id=company_id,
+        day=day,
+        person_id=person_id,
+        is_active=True,
+    )
+    if exclude_extra_work_id:
+        extra_work_qs = extra_work_qs.exclude(pk=exclude_extra_work_id)
+
+    if extra_work_qs.exists():
+        return True
+
+    leave_qs = StaffAbsence.objects.filter(
+        company_id=company_id,
+        person_id=person_id,
+        is_active=True,
+        date_from__lte=day,
+        date_to__gte=day,
+    )
+
+    return leave_qs.exists()
+
+
 class Position(models.Model):
     """
     Reference table for staff positions.
