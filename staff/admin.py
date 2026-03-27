@@ -237,13 +237,14 @@ class TemporaryCoverAdmin(admin.ModelAdmin):
     list_display = (
         "temporary_cover_id",
         "company",
-        "day",
+        "date_from",
+        "date_to",
         "absence",
         "covering_person",
         "is_active",
         "created_at",
     )
-    list_filter = ("company", "day", "is_active")
+    list_filter = ("company", "date_from", "date_to", "is_active")
     search_fields = (
         "covering_person__first_name",
         "covering_person__family_name",
@@ -251,7 +252,7 @@ class TemporaryCoverAdmin(admin.ModelAdmin):
         "absence__person__family_name",
         "note",
     )
-    ordering = ("company", "-created_at")
+    ordering = ("company", "-date_from", "-created_at")
     readonly_fields = ("created_at",)
     autocomplete_fields = ("absence", "staffing_plan_item", "covering_person")
     inlines = [TemporaryCoverDocumentInline]

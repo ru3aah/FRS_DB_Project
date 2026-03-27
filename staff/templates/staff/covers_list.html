@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+{% block title %}FRS DB | Covers{% endblock %}
+
+{% block content %}
+{% include "includes/navbar.html" %}
+
+<div class="container mt-4">
+
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+        <div class="d-flex gap-2 flex-wrap">
+            <a class="btn btn-outline-secondary"
+               href="{% url 'staff:index' %}">Staff menu</a>
+
+            <a class="btn btn-outline-secondary"
+               href="{% url 'staff:leaves_list' %}">Leaves</a>
+        </div>
+
+        <div class="d-flex gap-2 flex-wrap">
+            <a href="{{ toggle_filter_url }}"
+               class="btn btn-outline-secondary">
+                {{ toggle_filter_label }}
+            </a>
+
+            <a href="{% url 'staff:covers_add' %}"
+               class="btn btn-primary">
+                Add replacement
+            </a>
+        </div>
+    </div>
+
+    {% if not active_company %}
+        <div class="alert alert-warning">
+            Active company is not selected.
+        </div>
+
+    {% else %}
+        <div class="card shadow-sm">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <strong>Temporary covers</strong>
+                <span class="text-muted small">{{ active_company.name }}</span>
+            </div>
+
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-bordered table-striped table-hover align-middle mb-0">
+                        <thead class="table-light text-center">
+                        <tr>
+                            <th style="width:220px;">Absent person</th>
+                            <th style="width:120px;">Leave code</th>
+                            <th style="width:220px;">Covering person</th>
+                            <th style="width:140px;">Day</th>
+                            <th style="width:220px;">Position</th>
+                            <th>Note</th>
+                            <th style="width:120px;">Status</th>
+                            <th style="width:180px;">Created</th>
+                        </tr>
+                        </thead>
+
+                        <tbody>
+                        {% for cover in covers %}
+                            <tr style="cursor:pointer;"
+                                onclick="window.location='{% url 'staff:covers_detail' cover.pk %}'">
+
+                                <td>
+                                    {{ cover.absence.person }}
+                                </td>
+
+                                <td class="text-center">
+                                    {% if cover.absence.leave_type %}
+                                        <strong>{{ cover.absence.leave_type.leave_code }}</strong>
+                                    {% else %}
+                                        —
+                                    {% endif %}
+                                </td>
+
+                                <td>
+                                    <strong>{{ cover.covering_person }}</strong>
+                                </td>
+
+                                <td class="text-center">
+                                    {{ cover.day|date:"SHORT_DATE_FORMAT" }}
+                                </td>
+
+                                <td>
+                                    {% if cover.staffing_plan_item and cover.staffing_plan_item.position %}
+                                        {{ cover.staffing_plan_item.position }}
+                                    {% else %}
+                                        —
+                                    {% endif %}
+                                </td>
+
+                                <td>
+                                    {{ cover.note|default:"" }}
+                                </td>
+
+                                <td class="text-center">
+                                    {% if cover.is_active %}
+                                        <span class="badge bg-success">Active</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">Inactive</span>
+                                    {% endif %}
+                                </td>
+
+                                <td class="text-center">
+                                    {% if cover.created_at %}
+                                        {{ cover.created_at|date:"SHORT_DATETIME_FORMAT" }}
+                                    {% else %}
+                                        —
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        {% empty %}
+                            <tr>
+                                <td colspan="8" class="text-center py-4 text-muted">
+                                    No temporary covers found.
+                                </td>
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            {% if is_paginated %}
+                <div class="card-footer">
+                    <nav aria-label="Covers pages">
+                        <ul class="pagination justify-content-center mb-0">
+                            {% if page_obj.has_previous %}
+                                <li class="page-item">
+                                    <a class="page-link"
+                                       href="?page={{ page_obj.previous_page_number }}{% if show_all %}&show=all{% endif %}">
+                                        Previous
+                                    </a>
+                                </li>
+                            {% else %}
+                                <li class="page-item disabled">
+                                    <span class="page-link">Previous</span>
+                                </li>
+                            {% endif %}
+
+                            <li class="page-item disabled">
+                                <span class="page-link">
+                                    Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+                                </span>
+                            </li>
+
+                            {% if page_obj.has_next %}
+                                <li class="page-item">
+                                    <a class="page-link"
+                                       href="?page={{ page_obj.next_page_number }}{% if show_all %}&show=all{% endif %}">
+                                        Next
+                                    </a>
+                                </li>
+                            {% else %}
+                                <li class="page-item disabled">
+                                    <span class="page-link">Next</span>
+                                </li>
+                            {% endif %}
+                        </ul>
+                    </nav>
+                </div>
+            {% endif %}
+        </div>
+    {% endif %}
+
+</div>
+{% endblock %}

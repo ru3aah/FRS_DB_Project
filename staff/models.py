@@ -819,7 +819,8 @@ class TemporaryCover(models.Model):
         help_text="Leave/absence that this cover is closing.",
     )
 
-    day = models.DateField(db_index=True)
+    date_from = models.DateField(db_index=True)
+    date_to = models.DateField(db_index=True)
 
     staffing_plan_item = models.ForeignKey(
         StaffingPlanItem,
@@ -840,11 +841,21 @@ class TemporaryCover(models.Model):
 
     class Meta:
         db_table = "staff_temporary_covers"
-        ordering = ["-created_at"]
+        ordering = ["-date_from", "-created_at"]
         constraints = [
             models.UniqueConstraint(
-                fields=["company", "day", "staffing_plan_item", "covering_person"],
-                name="uq_temp_cover_company_day_item_covering_person",
+                fields=[
+                    "company",
+                    "date_from",
+                    "date_to",
+                    "staffing_plan_item",
+                    "covering_person",
+                ],
+                name="uq_temp_cover_company_period_item_covering_person",
+            ),
+            models.CheckConstraint(
+                condition=Q(date_to__gte=models.F("date_from")),
+                name="ck_temp_cover_date_to_gte_from",
             ),
         ]
 
@@ -854,6 +865,11 @@ class TemporaryCover(models.Model):
         if not self.absence_id:
             raise ValidationError(
                 {"absence": "Temporary cover must be linked to an existing absence."}
+            )
+
+        if self.date_from and self.date_to and self.date_to < self.date_from:
+            raise ValidationError(
+                {"date_to": "Cover end date cannot be earlier than cover start date."}
             )
 
         if (
@@ -874,12 +890,17 @@ class TemporaryCover(models.Model):
                 {"absence": "Absence company must match temporary cover company."}
             )
 
-        if self.day and (
-            self.day < self.absence.date_from or self.day > self.absence.date_to
-        ):
-            raise ValidationError(
-                {"day": "Temporary cover day must be inside linked absence period."}
-            )
+        if self.date_from and self.date_to:
+            if (
+                self.date_from < self.absence.date_from
+                or self.date_to > self.absence.date_to
+            ):
+                raise ValidationError(
+                    {
+                        "date_from": "Temporary cover period must be inside linked absence period.",
+                        "date_to": "Temporary cover period must be inside linked absence period.",
+                    }
+                )
 
         if self.absence.person_id == self.covering_person_id:
             raise ValidationError(
@@ -888,17 +909,57 @@ class TemporaryCover(models.Model):
                 }
             )
 
-        if _person_has_nonbase_day_override(
+        if not self.covering_person_id or not self.date_from or not self.date_to:
+            return
+
+        overlap_qs = TemporaryCover.objects.filter(
             company_id=self.company_id,
-            person_id=self.covering_person_id,
-            day=self.day,
-            exclude_temporary_cover_id=self.pk,
-        ):
+            covering_person_id=self.covering_person_id,
+            is_active=True,
+            date_from__lte=self.date_to,
+            date_to__gte=self.date_from,
+        )
+        if self.pk:
+            overlap_qs = overlap_qs.exclude(pk=self.pk)
+
+        if overlap_qs.exists():
             raise ValidationError(
                 {
                     "covering_person": (
-                        "This person already has another day override on this day "
-                        "(temporary cover, extra work, or leave)."
+                        "This person already has another temporary cover overlapping "
+                        "with the selected cover period."
+                    )
+                }
+            )
+
+        extra_work_overlap_qs = ExtraWork.objects.filter(
+            company_id=self.company_id,
+            person_id=self.covering_person_id,
+            is_active=True,
+            day__gte=self.date_from,
+            day__lte=self.date_to,
+        )
+        if extra_work_overlap_qs.exists():
+            raise ValidationError(
+                {
+                    "covering_person": (
+                        "This person already has extra work within the selected cover period."
+                    )
+                }
+            )
+
+        leave_overlap_qs = StaffAbsence.objects.filter(
+            company_id=self.company_id,
+            person_id=self.covering_person_id,
+            is_active=True,
+            date_from__lte=self.date_to,
+            date_to__gte=self.date_from,
+        )
+        if leave_overlap_qs.exists():
+            raise ValidationError(
+                {
+                    "covering_person": (
+                        "This person already has leave overlapping with the selected cover period."
                     )
                 }
             )
@@ -908,7 +969,10 @@ class TemporaryCover(models.Model):
         return super().save(*args, **kwargs)
 
     def __str__(self) -> str:
-        return f"{self.day} | {self.covering_person} covers {self.absence.person}"
+        return (
+            f"{self.date_from}..{self.date_to} | "
+            f"{self.covering_person} covers {self.absence.person}"
+        )
 
 
 class TemporaryCoverDocument(models.Model):

@@ -41,6 +41,8 @@ from .views import (
     LeaveDeleteView,
     LeaveDocumentUploadView,
     LeaveDocumentDeleteView,
+    TemporaryCoverListView,
+    TemporaryCoverCreateView,
 )
 
 app_name = "staff"
@@ -173,5 +175,16 @@ urlpatterns = [
         "leaves/<int:pk>/documents/<int:doc_pk>/delete/",
         LeaveDocumentDeleteView.as_view(),
         name="leave_document_delete",
+    ),
+    path("covers/", TemporaryCoverListView.as_view(), name="covers_list"),
+    path(
+        "covers/add/",
+        TemporaryCoverCreateView.as_view(),
+        name="covers_add",
+    ),
+    path(
+        "covers/<int:pk>/",
+        RedirectView.as_view(url=reverse_lazy("under_construction")),
+        name="covers_detail",
     ),
 ]

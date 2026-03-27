@@ -26,6 +26,7 @@ from .forms import (
     ShiftTypeForm,
     StaffingPlanForm,
     StaffingPlanItemFormSet,
+    TemporaryCoverForm,
     evaluate_shift_pattern,
 )
 from .models import (
@@ -2303,3 +2304,94 @@ class LeaveDocumentDeleteView(LoginRequiredMixin, ActiveCompanyMixin, View):
         messages.success(request, "Document deleted.")
 
         return redirect("staff:leaves_detail", pk=leave.pk)
+
+
+class TemporaryCoverListView(LoginRequiredMixin, ActiveCompanyMixin, ListView):
+    template_name = "staff/covers_list.html"
+    context_object_name = "covers"
+    paginate_by = 50
+
+    def get_queryset(self):
+        company = self.get_active_company()
+        if company is None:
+            return TemporaryCover.objects.none()
+
+        qs = (
+            TemporaryCover.objects.filter(company=company)
+            .select_related(
+                "absence",
+                "absence__person",
+                "absence__leave_type",
+                "staffing_plan_item",
+                "staffing_plan_item__position",
+                "staffing_plan_item__staffing_plan",
+                "covering_person",
+            )
+            .order_by("-day", "-created_at")
+        )
+
+        if self.request.GET.get("show") != "all":
+            qs = qs.filter(is_active=True)
+
+        return qs
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+
+        company = self.get_active_company()
+        ctx["active_company"] = company
+
+        show_all = self.request.GET.get("show") == "all"
+        ctx["show_all"] = show_all
+
+        if show_all:
+            ctx["toggle_filter_label"] = "Show active only"
+            ctx["toggle_filter_url"] = self.request.path
+        else:
+            ctx["toggle_filter_label"] = "Show all"
+            ctx["toggle_filter_url"] = f"{self.request.path}?show=all"
+
+        return ctx
+
+
+class TemporaryCoverCreateView(LoginRequiredMixin, ActiveCompanyMixin, CreateView):
+    model = TemporaryCover
+    form_class = TemporaryCoverForm
+    template_name = "staff/cover_form.html"
+    success_url = reverse_lazy("staff:covers_list")
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["company"] = self.get_active_company()
+        return kwargs
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["active_company"] = self.get_active_company()
+        return ctx
+
+    def form_valid(self, form):
+        company = self.get_active_company()
+        if company is None:
+            messages.error(self.request, "Active company is not selected.")
+            return redirect("staff:covers_list")
+
+        form.instance.company = company
+
+        try:
+            response = super().form_valid(form)
+        except ValidationError as e:
+            if hasattr(e, "message_dict"):
+                for field, errors in e.message_dict.items():
+                    if field == "__all__":
+                        for err in errors:
+                            form.add_error(None, err)
+                    else:
+                        for err in errors:
+                            form.add_error(field, err)
+            else:
+                form.add_error(None, str(e))
+            return self.render_to_response(self.get_context_data(form=form))
+
+        messages.success(self.request, "Temporary cover created.")
+        return response

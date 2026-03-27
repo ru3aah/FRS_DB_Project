@@ -19,6 +19,7 @@ from .models import (
     StaffingAssignment,
     StaffingPlan,
     StaffingPlanItem,
+    TemporaryCover,
 )
 
 
@@ -609,3 +610,117 @@ class RosterOverrideForm(forms.ModelForm):
                     staffing_plan__company=company
                 ).select_related("position", "staffing_plan")
             )
+
+
+class TemporaryCoverForm(forms.ModelForm):
+    class Meta:
+        model = TemporaryCover
+        fields = [
+            "absence",
+            "date_from",
+            "date_to",
+            "staffing_plan_item",
+            "covering_person",
+            "note",
+            "is_active",
+        ]
+        widgets = {
+            "absence": forms.Select(attrs={"class": "form-select"}),
+            "date_from": forms.DateInput(
+                attrs={"type": "date", "class": "form-control"}
+            ),
+            "date_to": forms.DateInput(attrs={"type": "date", "class": "form-control"}),
+            "staffing_plan_item": forms.Select(attrs={"class": "form-select"}),
+            "covering_person": forms.Select(attrs={"class": "form-select"}),
+            "note": forms.TextInput(attrs={"class": "form-control"}),
+            "is_active": forms.CheckboxInput(attrs={"class": "form-check-input"}),
+        }
+
+    def __init__(self, *args, company=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.company = company
+
+        self.fields["absence"].queryset = StaffAbsence.objects.none()
+        self.fields["staffing_plan_item"].queryset = StaffingPlanItem.objects.none()
+        self.fields["covering_person"].queryset = Person.objects.none()
+
+        if company is not None:
+            self.fields["absence"].queryset = (
+                StaffAbsence.objects.filter(company=company)
+                .select_related("person", "leave_type")
+                .order_by(
+                    "-date_from",
+                    "-date_to",
+                    "person__family_name",
+                    "person__first_name",
+                )
+            )
+
+            self.fields["staffing_plan_item"].queryset = (
+                StaffingPlanItem.objects.filter(staffing_plan__company=company)
+                .select_related("position", "staffing_plan")
+                .order_by("position__name_long")
+            )
+
+            self.fields["covering_person"].queryset = Person.objects.filter(
+                company=company
+            ).order_by("family_name", "first_name", "second_name")
+
+    def clean(self):
+        cleaned = super().clean()
+
+        absence = cleaned.get("absence")
+        date_from = cleaned.get("date_from")
+        date_to = cleaned.get("date_to")
+        staffing_plan_item = cleaned.get("staffing_plan_item")
+        covering_person = cleaned.get("covering_person")
+
+        if self.company is None:
+            raise ValidationError("Active company is not selected.")
+
+        if absence and absence.company_id != self.company.id:
+            self.add_error(
+                "absence", "Selected absence does not belong to active company."
+            )
+
+        if (
+            staffing_plan_item
+            and staffing_plan_item.staffing_plan.company_id != self.company.id
+        ):
+            self.add_error(
+                "staffing_plan_item",
+                "Selected staffing plan item does not belong to active company.",
+            )
+
+        if covering_person and covering_person.company_id != self.company.id:
+            self.add_error(
+                "covering_person",
+                "Selected person does not belong to active company.",
+            )
+
+        if date_from and date_to and date_to < date_from:
+            self.add_error(
+                "date_to",
+                "Cover end date cannot be earlier than cover start date.",
+            )
+
+        if absence and date_from and date_to:
+            if date_from < absence.date_from or date_to > absence.date_to:
+                self.add_error(
+                    "date_from",
+                    "Cover period must be inside linked absence period.",
+                )
+                self.add_error(
+                    "date_to",
+                    "Cover period must be inside linked absence period.",
+                )
+
+        return cleaned
+
+    def save(self, commit=True):
+        obj = super().save(commit=False)
+        if self.company is not None:
+            obj.company = self.company
+        if commit:
+            obj.save()
+        return obj

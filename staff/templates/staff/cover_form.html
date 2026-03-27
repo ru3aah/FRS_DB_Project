@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% block title %}FRS DB | Cover form{% endblock %}
+
+{% block content %}
+{% include "includes/navbar.html" %}
+
+<div class="container mt-4">
+
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+        <div class="d-flex gap-2 flex-wrap">
+            <a class="btn btn-outline-secondary"
+               href="{% url 'staff:covers_list' %}">Back to covers</a>
+
+            <a class="btn btn-outline-secondary"
+               href="{% url 'staff:index' %}">Staff menu</a>
+        </div>
+    </div>
+
+    {% if not active_company %}
+        <div class="alert alert-warning">
+            Active company is not selected.
+        </div>
+
+    {% else %}
+        <div class="card shadow-sm">
+            <div class="card-header">
+                <strong>Add temporary cover</strong>
+            </div>
+
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+
+                    {% if form.non_field_errors %}
+                        <div class="alert alert-danger py-2">
+                            {{ form.non_field_errors }}
+                        </div>
+                    {% endif %}
+
+                    <!-- ABSENCE -->
+                    <div class="mb-3">
+                        <label class="form-label">Absence</label>
+                        {{ form.absence }}
+                        {% if form.absence.errors %}
+                            <div class="text-danger small mt-1">{{ form.absence.errors }}</div>
+                        {% endif %}
+                    </div>
+
+                    <!-- DAY -->
+                    <div class="mb-3">
+                        <label class="form-label">Cover day</label>
+                        {{ form.day }}
+                        {% if form.day.errors %}
+                            <div class="text-danger small mt-1">{{ form.day.errors }}</div>
+                        {% endif %}
+                        <div class="form-text">
+                            Must be inside absence period.
+                        </div>
+                    </div>
+
+                    <!-- POSITION -->
+                    <div class="mb-3">
+                        <label class="form-label">Position (plan slot)</label>
+                        {{ form.staffing_plan_item }}
+                        {% if form.staffing_plan_item.errors %}
+                            <div class="text-danger small mt-1">{{ form.staffing_plan_item.errors }}</div>
+                        {% endif %}
+                    </div>
+
+                    <!-- COVERING PERSON -->
+                    <div class="mb-3">
+                        <label class="form-label">Covering person</label>
+                        {{ form.covering_person }}
+                        {% if form.covering_person.errors %}
+                            <div class="text-danger small mt-1">{{ form.covering_person.errors }}</div>
+                        {% endif %}
+                    </div>
+
+                    <!-- NOTE -->
+                    <div class="mb-3">
+                        <label class="form-label">Note</label>
+                        {{ form.note }}
+                        {% if form.note.errors %}
+                            <div class="text-danger small mt-1">{{ form.note.errors }}</div>
+                        {% endif %}
+                    </div>
+
+                    <!-- ACTIVE -->
+                    <div class="form-check mb-3">
+                        {{ form.is_active }}
+                        <label class="form-check-label">
+                            Active
+                        </label>
+                    </div>
+
+                    <div class="d-flex justify-content-end gap-2">
+                        <a class="btn btn-outline-secondary"
+                           href="{% url 'staff:covers_list' %}">
+                            Cancel
+                        </a>
+
+                        <button type="submit" class="btn btn-primary">
+                            Save
+                        </button>
+                    </div>
+
+                </form>
+            </div>
+        </div>
+    {% endif %}
+
+</div>
+{% endblock %}
