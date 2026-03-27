@@ -407,9 +407,10 @@ def _get_work_override_code_for_day(
     temp_cover = (
         TemporaryCover.objects.filter(
             company_id=company_id,
-            day=day,
             covering_person_id=person_id,
             is_active=True,
+            date_from__lte=day,
+            date_to__gte=day,
         )
         .select_related("staffing_plan_item__position")
         .first()
@@ -2327,7 +2328,7 @@ class TemporaryCoverListView(LoginRequiredMixin, ActiveCompanyMixin, ListView):
                 "staffing_plan_item__staffing_plan",
                 "covering_person",
             )
-            .order_by("-day", "-created_at")
+            .order_by("-date_from", "-created_at")
         )
 
         if self.request.GET.get("show") != "all":
@@ -2359,6 +2360,15 @@ class TemporaryCoverCreateView(LoginRequiredMixin, ActiveCompanyMixin, CreateVie
     form_class = TemporaryCoverForm
     template_name = "staff/cover_form.html"
     success_url = reverse_lazy("staff:covers_list")
+
+    def get_initial(self):
+        initial = super().get_initial()
+        absence_raw = (self.request.GET.get("absence") or "").strip()
+
+        if absence_raw.isdigit():
+            initial["absence"] = int(absence_raw)
+
+        return initial
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()

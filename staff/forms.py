@@ -5,6 +5,8 @@ from datetime import date, timedelta
 from django import forms
 from django.core.exceptions import ValidationError
 from django.forms import inlineformset_factory
+from django.db import models
+
 
 from persons.models import Person
 
@@ -613,25 +615,137 @@ class RosterOverrideForm(forms.ModelForm):
 
 
 class TemporaryCoverForm(forms.ModelForm):
+    class AbsenceChoiceField(forms.ModelChoiceField):
+        def __init__(self, *args, company=None, **kwargs):
+            super().__init__(*args, **kwargs)
+            self.company = company
+
+        def label_from_instance(self, obj: StaffAbsence) -> str:
+            full_name = " ".join(
+                part
+                for part in [
+                    obj.person.first_name,
+                    obj.person.second_name,
+                    obj.person.family_name,
+                ]
+                if part
+            ).strip()
+
+            leave_code = obj.leave_type.leave_code if obj.leave_type_id else "—"
+            period = f"{obj.date_from:%d.%m.%Y} – {obj.date_to:%d.%m.%Y}"
+
+            position_name = "No position"
+            shift_label = "No shift"
+
+            if self.company is not None:
+                assignment = (
+                    StaffingAssignment.objects.filter(
+                        company=self.company,
+                        person=obj.person,
+                        assigned_at__date__lte=obj.date_to,
+                    )
+                    .filter(
+                        models.Q(released_at__isnull=True)
+                        | models.Q(released_at__date__gte=obj.date_from)
+                    )
+                    .select_related("staffing_plan_item__position")
+                    .order_by("-assigned_at")
+                    .first()
+                )
+                if (
+                    assignment
+                    and assignment.staffing_plan_item
+                    and assignment.staffing_plan_item.position
+                ):
+                    position_name = (
+                        assignment.staffing_plan_item.position.name_short
+                        or assignment.staffing_plan_item.position.name_long
+                    )
+
+                membership = (
+                    ShiftMembership.objects.filter(
+                        company=self.company,
+                        person=obj.person,
+                        is_active=True,
+                    )
+                    .select_related("shift")
+                    .order_by("-assigned_at")
+                    .first()
+                )
+                if membership and membership.shift:
+                    shift_label = membership.shift.shift_number
+
+            return (
+                f"{full_name} | {leave_code} | {period} | "
+                f"{position_name} | {shift_label}"
+            )
+
+    class CoveringPersonChoiceField(forms.ModelChoiceField):
+        def __init__(self, *args, company=None, **kwargs):
+            super().__init__(*args, **kwargs)
+            self.company = company
+
+        def label_from_instance(self, obj: Person) -> str:
+            full_name = " ".join(
+                part
+                for part in [obj.first_name, obj.second_name, obj.family_name]
+                if part
+            ).strip()
+
+            position_name = "No position"
+            shift_label = "No shift"
+
+            if self.company is not None:
+                assignment = (
+                    StaffingAssignment.objects.filter(
+                        company=self.company,
+                        person=obj,
+                        is_active=True,
+                    )
+                    .select_related("staffing_plan_item__position")
+                    .order_by("-assigned_at")
+                    .first()
+                )
+                if (
+                    assignment
+                    and assignment.staffing_plan_item
+                    and assignment.staffing_plan_item.position
+                ):
+                    position_name = (
+                        assignment.staffing_plan_item.position.name_short
+                        or assignment.staffing_plan_item.position.name_long
+                    )
+
+                membership = (
+                    ShiftMembership.objects.filter(
+                        company=self.company,
+                        person=obj,
+                        is_active=True,
+                    )
+                    .select_related("shift")
+                    .order_by("-assigned_at")
+                    .first()
+                )
+                if membership and membership.shift:
+                    shift_label = membership.shift.shift_number
+
+            return f"{full_name} | {position_name} | {shift_label}"
+
     class Meta:
         model = TemporaryCover
         fields = [
             "absence",
             "date_from",
             "date_to",
-            "staffing_plan_item",
             "covering_person",
             "note",
             "is_active",
         ]
         widgets = {
-            "absence": forms.Select(attrs={"class": "form-select"}),
             "date_from": forms.DateInput(
                 attrs={"type": "date", "class": "form-control"}
             ),
             "date_to": forms.DateInput(attrs={"type": "date", "class": "form-control"}),
-            "staffing_plan_item": forms.Select(attrs={"class": "form-select"}),
-            "covering_person": forms.Select(attrs={"class": "form-select"}),
             "note": forms.TextInput(attrs={"class": "form-control"}),
             "is_active": forms.CheckboxInput(attrs={"class": "form-check-input"}),
         }
@@ -640,9 +754,21 @@ class TemporaryCoverForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.company = company
 
-        self.fields["absence"].queryset = StaffAbsence.objects.none()
-        self.fields["staffing_plan_item"].queryset = StaffingPlanItem.objects.none()
-        self.fields["covering_person"].queryset = Person.objects.none()
+        self.fields["absence"] = self.AbsenceChoiceField(
+            queryset=StaffAbsence.objects.none(),
+            widget=forms.Select(attrs={"class": "form-select"}),
+            required=True,
+            label="Absence",
+            company=company,
+        )
+
+        self.fields["covering_person"] = self.CoveringPersonChoiceField(
+            queryset=Person.objects.none(),
+            widget=forms.Select(attrs={"class": "form-select"}),
+            required=True,
+            label="Covering person",
+            company=company,
+        )
 
         if company is not None:
             self.fields["absence"].queryset = (
@@ -656,15 +782,53 @@ class TemporaryCoverForm(forms.ModelForm):
                 )
             )
 
-            self.fields["staffing_plan_item"].queryset = (
-                StaffingPlanItem.objects.filter(staffing_plan__company=company)
-                .select_related("position", "staffing_plan")
-                .order_by("position__name_long")
-            )
-
             self.fields["covering_person"].queryset = Person.objects.filter(
                 company=company
             ).order_by("family_name", "first_name", "second_name")
+
+        absence = None
+        if self.is_bound:
+            absence_raw = (self.data.get("absence") or "").strip()
+            if absence_raw.isdigit() and company is not None:
+                absence = (
+                    StaffAbsence.objects.filter(company=company, pk=int(absence_raw))
+                    .select_related("person", "leave_type")
+                    .first()
+                )
+        else:
+            absence = self.initial.get("absence")
+
+        if isinstance(absence, StaffAbsence):
+            if not self.initial.get("date_from"):
+                self.initial["date_from"] = absence.date_from
+            if not self.initial.get("date_to"):
+                self.initial["date_to"] = absence.date_to
+
+    def _find_staffing_plan_item(
+        self,
+        *,
+        absence: StaffAbsence,
+        date_from: date,
+        date_to: date,
+    ) -> StaffingPlanItem | None:
+        assignment = (
+            StaffingAssignment.objects.filter(
+                company=self.company,
+                person=absence.person,
+                assigned_at__date__lte=date_to,
+            )
+            .filter(
+                models.Q(released_at__isnull=True)
+                | models.Q(released_at__date__gte=date_from)
+            )
+            .select_related("staffing_plan_item", "staffing_plan_item__position")
+            .order_by("-assigned_at")
+            .first()
+        )
+
+        if assignment:
+            return assignment.staffing_plan_item
+        return None
 
     def clean(self):
         cleaned = super().clean()
@@ -672,7 +836,6 @@ class TemporaryCoverForm(forms.ModelForm):
         absence = cleaned.get("absence")
         date_from = cleaned.get("date_from")
         date_to = cleaned.get("date_to")
-        staffing_plan_item = cleaned.get("staffing_plan_item")
         covering_person = cleaned.get("covering_person")
 
         if self.company is None:
@@ -681,15 +844,6 @@ class TemporaryCoverForm(forms.ModelForm):
         if absence and absence.company_id != self.company.id:
             self.add_error(
                 "absence", "Selected absence does not belong to active company."
-            )
-
-        if (
-            staffing_plan_item
-            and staffing_plan_item.staffing_plan.company_id != self.company.id
-        ):
-            self.add_error(
-                "staffing_plan_item",
-                "Selected staffing plan item does not belong to active company.",
             )
 
         if covering_person and covering_person.company_id != self.company.id:
@@ -715,12 +869,25 @@ class TemporaryCoverForm(forms.ModelForm):
                     "Cover period must be inside linked absence period.",
                 )
 
+            staffing_plan_item = self._find_staffing_plan_item(
+                absence=absence,
+                date_from=date_from,
+                date_to=date_to,
+            )
+            if staffing_plan_item is None:
+                raise ValidationError(
+                    "Cannot determine staffing plan position for the selected absence period."
+                )
+
+            cleaned["staffing_plan_item"] = staffing_plan_item
+
         return cleaned
 
     def save(self, commit=True):
         obj = super().save(commit=False)
         if self.company is not None:
             obj.company = self.company
+        obj.staffing_plan_item = self.cleaned_data["staffing_plan_item"]
         if commit:
             obj.save()
         return obj

@@ -23,7 +23,7 @@
 
             <a href="{% url 'staff:covers_add' %}"
                class="btn btn-primary">
-                Add replacement
+                Add cover
             </a>
         </div>
     </div>
@@ -47,8 +47,9 @@
                         <tr>
                             <th style="width:220px;">Absent person</th>
                             <th style="width:120px;">Leave code</th>
+                            <th style="width:140px;">From</th>
+                            <th style="width:140px;">To</th>
                             <th style="width:220px;">Covering person</th>
-                            <th style="width:140px;">Day</th>
                             <th style="width:220px;">Position</th>
                             <th>Note</th>
                             <th style="width:120px;">Status</th>
@@ -73,12 +74,16 @@
                                     {% endif %}
                                 </td>
 
-                                <td>
-                                    <strong>{{ cover.covering_person }}</strong>
+                                <td class="text-center">
+                                    {{ cover.date_from|date:"SHORT_DATE_FORMAT" }}
                                 </td>
 
                                 <td class="text-center">
-                                    {{ cover.day|date:"SHORT_DATE_FORMAT" }}
+                                    {{ cover.date_to|date:"SHORT_DATE_FORMAT" }}
+                                </td>
+
+                                <td>
+                                    <strong>{{ cover.covering_person }}</strong>
                                 </td>
 
                                 <td>
@@ -111,7 +116,7 @@
                             </tr>
                         {% empty %}
                             <tr>
-                                <td colspan="8" class="text-center py-4 text-muted">
+                                <td colspan="9" class="text-center py-4 text-muted">
                                     No temporary covers found.
                                 </td>
                             </tr>

@@ -16,6 +16,11 @@
 
             {% if leave %}
                 <div class="d-flex gap-2 flex-wrap">
+                    <a class="btn btn-primary"
+                       href="{% url 'staff:covers_add' %}?absence={{ leave.pk }}">
+                        Add cover
+                    </a>
+
                     <a class="btn btn-outline-primary"
                        href="{% url 'staff:leaves_edit' leave.pk %}">
                         Edit
