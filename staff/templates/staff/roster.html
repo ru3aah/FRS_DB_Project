@@ -25,8 +25,8 @@
                 </a>
 
                 <span class="fw-semibold">
-        {{ month_start|date:"F Y" }}
-      </span>
+                    {{ month_start|date:"F Y" }}
+                </span>
 
                 <a class="btn btn-outline-primary btn-sm"
                    href="?month={{ next_month_param }}">
@@ -36,12 +36,10 @@
         </div>
 
         {% if not active_company %}
-            <div class="alert alert-warning">Active company is not selected.
-            </div>
+            <div class="alert alert-warning">Active company is not selected.</div>
 
         {% elif not plan %}
-            <div class="alert alert-warning">No active staffing plan found.
-            </div>
+            <div class="alert alert-warning">No active staffing plan found.</div>
 
         {% else %}
             <div class="card shadow-sm mb-3">
@@ -68,27 +66,26 @@
             </div>
 
             {% if not shift_groups %}
-                <div class="alert alert-info">No roster data for selected
-                    period.
-                </div>
+                <div class="alert alert-info">No roster data for selected period.</div>
             {% else %}
                 <div class="frs-scroll-panel">
                     <table class="table table-sm align-middle text-center frs-table-fixed">
                         <thead>
                         <tr class="frs-sticky-top-1">
-                            <th rowspan="3"
+                            <th rowspan="{{ pattern_rows|length|add:2 }}"
                                 class="roster-col-seq frs-sticky-left-1">#
                             </th>
-                            <th rowspan="3"
+                            <th rowspan="{{ pattern_rows|length|add:2 }}"
                                 class="roster-col-name frs-sticky-left-2">Name
                             </th>
-                            <th rowspan="3"
+                            <th rowspan="{{ pattern_rows|length|add:2 }}"
                                 class="roster-col-shift frs-sticky-left-3">Shift
                             </th>
-                            <th rowspan="3"
+                            <th rowspan="{{ pattern_rows|length|add:2 }}"
                                 class="roster-col-position frs-sticky-left-4">
                                 Position
                             </th>
+
                             {% for header in day_headers %}
                                 <th class="roster-day-col {% if header.is_weekend %}frs-weekend{% endif %}">
                                     {{ header.weekday_short }}
@@ -104,25 +101,23 @@
                             {% endfor %}
                         </tr>
 
-                        <tr class="frs-sticky-top-3">
-                            {% for header in day_headers %}
-                                <th class="roster-day-col">
-                                    {% with codes=day_to_shift_codes|get_item:header.date %}
-                                        {% if codes %}
-                                            {% with first_code=codes.0 %}
-                                                {% with pattern_key=first_code|slice:":1" shift_num=first_code|slice:"1:" %}
-                                                    <span class="roster-pattern-chip roster-pattern-{{ pattern_key }} roster-shift-num-{{ shift_num }}">
-                                      {{ codes|join:"/" }}
-                                  </span>
-                                                {% endwith %}
+                        {% for pattern in pattern_rows %}
+                            <tr class="frs-sticky-top-3">
+                                {% for cell in pattern.cells %}
+                                    <th class="roster-day-col">
+                                        {% if cell != "--" %}
+                                            {% with shift_num=cell|slice:"1:" %}
+                                                <span class="roster-pattern-chip roster-pattern-{{ pattern.pattern_key }} roster-shift-num-{{ shift_num }}">
+                                                    {{ cell }}
+                                                </span>
                                             {% endwith %}
                                         {% else %}
                                             <span class="roster-day-code frs-text-muted">--</span>
                                         {% endif %}
-                                    {% endwith %}
-                                </th>
-                            {% endfor %}
-                        </tr>
+                                    </th>
+                                {% endfor %}
+                            </tr>
+                        {% endfor %}
                         </thead>
 
                         <tbody>

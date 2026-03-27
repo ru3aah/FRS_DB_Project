@@ -466,6 +466,7 @@ class StaffRosterView(LoginRequiredMixin, ActiveCompanyMixin, TemplateView):
             ctx["days"] = []
             ctx["day_headers"] = []
             ctx["shift_groups"] = []
+            ctx["pattern_rows"] = []
             return ctx
 
         plan = (
@@ -479,6 +480,7 @@ class StaffRosterView(LoginRequiredMixin, ActiveCompanyMixin, TemplateView):
             ctx["days"] = []
             ctx["day_headers"] = []
             ctx["shift_groups"] = []
+            ctx["pattern_rows"] = []
             return ctx
 
         days = []
@@ -571,11 +573,30 @@ class StaffRosterView(LoginRequiredMixin, ActiveCompanyMixin, TemplateView):
             .order_by("shift_type__code_letter", "shift_no")
         )
 
-        day_to_shift_codes: dict[date, list[str]] = {}
+        pattern_to_day_codes: dict[str, dict[date, str]] = {}
         for shift in shifts:
+            pattern_key = (shift.shift_type.code_letter or "").strip().upper()
+            if not pattern_key:
+                continue
+
+            pattern_to_day_codes.setdefault(pattern_key, {})
+
             for day in days:
                 if shift.anchor_date and shift.is_on_duty(day):
-                    day_to_shift_codes.setdefault(day, []).append(shift.shift_number)
+                    pattern_to_day_codes[pattern_key][day] = shift.shift_number
+
+        pattern_rows = []
+        for pattern_key in sorted(pattern_to_day_codes.keys()):
+            cells = []
+            for day in days:
+                cells.append(pattern_to_day_codes[pattern_key].get(day, "--"))
+
+            pattern_rows.append(
+                {
+                    "pattern_key": pattern_key,
+                    "cells": cells,
+                }
+            )
 
         grouped: dict[str, list[dict]] = {}
 
@@ -647,7 +668,7 @@ class StaffRosterView(LoginRequiredMixin, ActiveCompanyMixin, TemplateView):
             )
 
         ctx["shift_groups"] = shift_groups
-        ctx["day_to_shift_codes"] = day_to_shift_codes
+        ctx["pattern_rows"] = pattern_rows
         ctx["absences_by_person"] = absences_by_person
         return ctx
 
