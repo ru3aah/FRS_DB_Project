@@ -32,7 +32,9 @@
             </div>
 
             <div class="card-body">
-                <form method="post">
+                <form method="post"
+                      class="js-leave-form"
+                      data-person-meta-id="leave-person-meta">
                     {% csrf_token %}
 
                     {% if form.non_field_errors %}
@@ -44,7 +46,7 @@
                     <div class="row g-3">
 
                         <div class="col-md-6">
-                            <label class="form-label">Person</label>
+                            <label class="form-label" for="{{ form.person.id_for_label }}">Person</label>
                             {{ form.person }}
                             {% if form.person.errors %}
                                 <div class="text-danger small">{{ form.person.errors }}</div>
@@ -53,20 +55,22 @@
 
                         <div class="col-md-3">
                             <label class="form-label">Position</label>
-                            <div id="person-position-preview" class="form-control bg-light">
+                            <div id="person-position-preview"
+                                 class="form-control bg-light js-person-position-preview">
                                 —
                             </div>
                         </div>
 
                         <div class="col-md-3">
                             <label class="form-label">Shift</label>
-                            <div id="person-shift-preview" class="form-control bg-light">
+                            <div id="person-shift-preview"
+                                 class="form-control bg-light js-person-shift-preview">
                                 —
                             </div>
                         </div>
 
                         <div class="col-md-6">
-                            <label class="form-label">Leave type</label>
+                            <label class="form-label" for="{{ form.leave_type.id_for_label }}">Leave type</label>
                             {{ form.leave_type }}
                             {% if form.leave_type.errors %}
                                 <div class="text-danger small">{{ form.leave_type.errors }}</div>
@@ -74,18 +78,22 @@
                         </div>
 
                         <div class="col-md-3">
-                            <label class="form-label">Date from</label>
+                            <label class="form-label" for="{{ form.date_from.id_for_label }}">Date from</label>
                             {{ form.date_from }}
-                            <div class="form-text">Pick from calendar or enter date as YYYY-MM-DD.</div>
+                            <div class="form-text frs-date-hint">
+                                Pick from calendar or enter date as YYYY-MM-DD.
+                            </div>
                             {% if form.date_from.errors %}
                                 <div class="text-danger small">{{ form.date_from.errors }}</div>
                             {% endif %}
                         </div>
 
                         <div class="col-md-3">
-                            <label class="form-label">Date to</label>
+                            <label class="form-label" for="{{ form.date_to.id_for_label }}">Date to</label>
                             {{ form.date_to }}
-                            <div class="form-text">Pick from calendar or enter date as YYYY-MM-DD.</div>
+                            <div class="form-text frs-date-hint">
+                                Pick from calendar or enter date as YYYY-MM-DD.
+                            </div>
                             {% if form.date_to.errors %}
                                 <div class="text-danger small">{{ form.date_to.errors }}</div>
                             {% endif %}
@@ -101,7 +109,7 @@
                         </div>
 
                         <div class="col-12">
-                            <label class="form-label">Note</label>
+                            <label class="form-label" for="{{ form.note.id_for_label }}">Note</label>
                             {{ form.note }}
                             {% if form.note.errors %}
                                 <div class="text-danger small">{{ form.note.errors }}</div>
@@ -128,32 +136,4 @@
     </div>
 
     {{ person_meta|json_script:"leave-person-meta" }}
-
-    <script>
-        document.addEventListener("DOMContentLoaded", function () {
-            const metaNode = document.getElementById("leave-person-meta");
-            const personMeta = metaNode ? JSON.parse(metaNode.textContent) : {};
-
-            const personSelect = document.getElementById("id_person");
-            const positionBox = document.getElementById("person-position-preview");
-            const shiftBox = document.getElementById("person-shift-preview");
-
-            function updatePersonPreview() {
-                if (!personSelect || !positionBox || !shiftBox) {
-                    return;
-                }
-
-                const selectedId = personSelect.value || "";
-                const item = personMeta[selectedId] || {};
-
-                positionBox.textContent = item.position || "—";
-                shiftBox.textContent = item.shift || "—";
-            }
-
-            if (personSelect) {
-                personSelect.addEventListener("change", updatePersonPreview);
-                updatePersonPreview();
-            }
-        });
-    </script>
 {% endblock %}

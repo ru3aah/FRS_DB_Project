@@ -35,7 +35,7 @@
             </div>
 
             <div class="card-body">
-                <form method="post">
+                <form method="post" class="js-cover-form">
                     {% csrf_token %}
 
                     {% if form.non_field_errors %}
@@ -45,7 +45,7 @@
                     {% endif %}
 
                     <div class="mb-3">
-                        <label class="form-label">Absence</label>
+                        <label class="form-label" for="{{ form.absence.id_for_label }}">Absence</label>
                         {{ form.absence }}
                         {% if form.absence.errors %}
                             <div class="text-danger small mt-1">{{ form.absence.errors }}</div>
@@ -54,16 +54,22 @@
 
                     <div class="row">
                         <div class="col-md-6 mb-3">
-                            <label class="form-label">Cover from</label>
+                            <label class="form-label" for="{{ form.date_from.id_for_label }}">Cover from</label>
                             {{ form.date_from }}
+                            <div class="form-text frs-date-hint">
+                                Pick from calendar or enter date as YYYY-MM-DD.
+                            </div>
                             {% if form.date_from.errors %}
                                 <div class="text-danger small mt-1">{{ form.date_from.errors }}</div>
                             {% endif %}
                         </div>
 
                         <div class="col-md-6 mb-3">
-                            <label class="form-label">Cover to</label>
+                            <label class="form-label" for="{{ form.date_to.id_for_label }}">Cover to</label>
                             {{ form.date_to }}
+                            <div class="form-text frs-date-hint">
+                                Pick from calendar or enter date as YYYY-MM-DD.
+                            </div>
                             {% if form.date_to.errors %}
                                 <div class="text-danger small mt-1">{{ form.date_to.errors }}</div>
                             {% endif %}
@@ -75,7 +81,16 @@
                     </div>
 
                     <div class="mb-3">
-                        <label class="form-label">Covering person</label>
+                        <div class="frs-suggestion-box">
+                            <div class="frs-suggestion-title">Selection note</div>
+                            <div class="frs-suggestion-text">
+                                The most relevant candidates are shown first, but all other available persons remain in the same list.
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label" for="{{ form.covering_person.id_for_label }}">Covering person</label>
                         {{ form.covering_person }}
                         {% if form.covering_person.errors %}
                             <div class="text-danger small mt-1">{{ form.covering_person.errors }}</div>
@@ -83,7 +98,7 @@
                     </div>
 
                     <div class="mb-3">
-                        <label class="form-label">Note</label>
+                        <label class="form-label" for="{{ form.note.id_for_label }}">Note</label>
                         {{ form.note }}
                         {% if form.note.errors %}
                             <div class="text-danger small mt-1">{{ form.note.errors }}</div>
@@ -92,7 +107,7 @@
 
                     <div class="form-check mb-3">
                         {{ form.is_active }}
-                        <label class="form-check-label">
+                        <label class="form-check-label" for="{{ form.is_active.id_for_label }}">
                             Active
                         </label>
                     </div>
