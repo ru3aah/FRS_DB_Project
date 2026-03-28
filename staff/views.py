@@ -9,7 +9,7 @@ from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
-from django.db.models import Prefetch
+from django.db.models import Prefetch, Q
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
@@ -24,6 +24,7 @@ from .forms import (
     AssignmentCreateForm,
     ShiftPackageCreateForm,
     ShiftTypeForm,
+    StaffAbsenceForm,
     StaffingPlanForm,
     StaffingPlanItemFormSet,
     TemporaryCoverForm,
@@ -168,6 +169,112 @@ def _get_people_from_active_plan(
         )
 
     return rows, person_ids
+
+
+def _get_person_assignment_and_membership_for_period(
+    *,
+    company: Company,
+    person: Person,
+    date_from: date,
+    date_to: date,
+) -> tuple[StaffingAssignment | None, ShiftMembership | None]:
+    assignment = (
+        StaffingAssignment.objects.filter(
+            company=company,
+            person=person,
+            assigned_at__date__lte=date_to,
+        )
+        .filter(Q(released_at__isnull=True) | Q(released_at__date__gte=date_from))
+        .select_related("staffing_plan_item__position")
+        .order_by("-assigned_at")
+        .first()
+    )
+
+    membership = (
+        ShiftMembership.objects.filter(
+            company=company,
+            person=person,
+            is_active=True,
+        )
+        .select_related("shift", "shift__shift_type")
+        .order_by("-assigned_at")
+        .first()
+    )
+
+    return assignment, membership
+
+
+def _get_person_position_and_shift(
+    *,
+    company: Company,
+    person: Person,
+    day_from: date | None = None,
+    day_to: date | None = None,
+) -> tuple[Position | None, Shift | None]:
+    assignment_qs = StaffingAssignment.objects.filter(
+        company=company,
+        person=person,
+    ).select_related("staffing_plan_item__position")
+
+    if day_from and day_to:
+        assignment_qs = assignment_qs.filter(assigned_at__date__lte=day_to).filter(
+            Q(released_at__isnull=True) | Q(released_at__date__gte=day_from)
+        )
+
+    assignment = assignment_qs.order_by("-assigned_at", "-pk").first()
+
+    membership = (
+        ShiftMembership.objects.filter(
+            company=company,
+            person=person,
+            is_active=True,
+        )
+        .select_related("shift", "shift__shift_type")
+        .order_by("-assigned_at", "-pk")
+        .first()
+    )
+
+    position = (
+        assignment.staffing_plan_item.position
+        if assignment and assignment.staffing_plan_item
+        else None
+    )
+    shift = membership.shift if membership else None
+
+    return position, shift
+
+
+def _build_leave_person_meta(company: Company) -> dict[str, dict[str, str]]:
+    result: dict[str, dict[str, str]] = {}
+
+    people = Person.objects.filter(company=company).order_by(
+        "family_name", "first_name", "second_name"
+    )
+
+    for person in people:
+        position, shift = _get_person_position_and_shift(
+            company=company,
+            person=person,
+        )
+
+        position_text = position.name_long if position else "—"
+
+        if shift:
+            if shift.shift_type and shift.shift_type.shift_type_name:
+                shift_text = (
+                    f"{shift.shift_number} — {shift.shift_type.shift_type_name}"
+                )
+            else:
+                shift_text = shift.shift_number
+        else:
+            shift_text = "—"
+
+        result[str(person.pk)] = {
+            "position": position_text,
+            "shift": shift_text,
+        }
+
+    return result
 
 
 class StaffShiftMembershipView(LoginRequiredMixin, ActiveCompanyMixin, TemplateView):
@@ -2049,6 +2156,9 @@ class LeaveDetailView(LoginRequiredMixin, ActiveCompanyMixin, TemplateView):
         if company is None:
             ctx["leave"] = None
             ctx["documents"] = []
+            ctx["leave_position"] = None
+            ctx["leave_shift"] = None
+            ctx["covers"] = []
             return ctx
 
         leave = get_object_or_404(
@@ -2061,34 +2171,65 @@ class LeaveDetailView(LoginRequiredMixin, ActiveCompanyMixin, TemplateView):
             company=company,
         )
 
+        leave_position, leave_shift = _get_person_position_and_shift(
+            company=company,
+            person=leave.person,
+            day_from=leave.date_from,
+            day_to=leave.date_to,
+        )
+
+        covers_qs = (
+            TemporaryCover.objects.filter(
+                company=company,
+                absence=leave,
+            )
+            .select_related(
+                "absence",
+                "absence__person",
+                "absence__leave_type",
+                "covering_person",
+                "staffing_plan_item",
+                "staffing_plan_item__position",
+            )
+            .order_by("date_from", "date_to", "pk")
+        )
+
+        covers = []
+        for cover in covers_qs:
+            _covering_position, covering_shift = _get_person_position_and_shift(
+                company=company,
+                person=cover.covering_person,
+                day_from=cover.date_from,
+                day_to=cover.date_to,
+            )
+            cover.covering_shift = covering_shift
+            covers.append(cover)
+
         ctx["leave"] = leave
         ctx["documents"] = leave.documents.all().order_by("-uploaded_at")
+        ctx["leave_position"] = leave_position
+        ctx["leave_shift"] = leave_shift
+        ctx["covers"] = covers
         return ctx
 
 
 class LeaveCreateView(LoginRequiredMixin, ActiveCompanyMixin, CreateView):
     model = StaffAbsence
+    form_class = StaffAbsenceForm
     template_name = "staff/leave_form.html"
-    fields = ["person", "leave_type", "date_from", "date_to", "note", "is_active"]
     success_url = reverse_lazy("staff:leaves_list")
 
-    def get_form(self, form_class=None):
-        form = super().get_form(form_class)
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["company"] = self.get_active_company()
+        return kwargs
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
         company = self.get_active_company()
-
-        if company is not None:
-            if "person" in form.fields:
-                form.fields["person"].queryset = Person.objects.filter(
-                    company=company
-                ).order_by("family_name", "first_name", "second_name")
-
-            if "leave_type" in form.fields:
-                form.fields["leave_type"].queryset = LeaveType.objects.filter(
-                    company=company,
-                    is_active=True,
-                ).order_by("name")
-
-        return form
+        ctx["active_company"] = company
+        ctx["person_meta"] = _build_leave_person_meta(company) if company else {}
+        return ctx
 
     def form_valid(self, form):
         company = self.get_active_company()
@@ -2106,34 +2247,27 @@ class LeaveCreateView(LoginRequiredMixin, ActiveCompanyMixin, CreateView):
 
 class LeaveUpdateView(LoginRequiredMixin, ActiveCompanyMixin, UpdateView):
     model = StaffAbsence
+    form_class = StaffAbsenceForm
     template_name = "staff/leave_form.html"
-    fields = ["person", "leave_type", "date_from", "date_to", "note", "is_active"]
     success_url = reverse_lazy("staff:leaves_list")
 
     def get_queryset(self):
         company = self.get_active_company()
         if company is None:
             return StaffAbsence.objects.none()
-
         return StaffAbsence.objects.filter(company=company)
 
-    def get_form(self, form_class=None):
-        form = super().get_form(form_class)
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["company"] = self.get_active_company()
+        return kwargs
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
         company = self.get_active_company()
-
-        if company is not None:
-            if "person" in form.fields:
-                form.fields["person"].queryset = Person.objects.filter(
-                    company=company
-                ).order_by("family_name", "first_name", "second_name")
-
-            if "leave_type" in form.fields:
-                form.fields["leave_type"].queryset = LeaveType.objects.filter(
-                    company=company,
-                    is_active=True,
-                ).order_by("name")
-
-        return form
+        ctx["active_company"] = company
+        ctx["person_meta"] = _build_leave_person_meta(company) if company else {}
+        return ctx
 
     def form_valid(self, form):
         messages.success(self.request, "Leave updated.")
@@ -2405,3 +2539,130 @@ class TemporaryCoverCreateView(LoginRequiredMixin, ActiveCompanyMixin, CreateVie
 
         messages.success(self.request, "Temporary cover created.")
         return response
+
+
+class TemporaryCoverDetailView(LoginRequiredMixin, ActiveCompanyMixin, TemplateView):
+    template_name = "staff/cover_detail.html"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+
+        company = self.get_active_company()
+        ctx["active_company"] = company
+
+        if company is None:
+            ctx["cover"] = None
+            ctx["absent_position"] = None
+            ctx["absent_shift"] = None
+            ctx["covering_position"] = None
+            ctx["covering_shift"] = None
+            return ctx
+
+        cover = get_object_or_404(
+            TemporaryCover.objects.select_related(
+                "absence",
+                "absence__person",
+                "absence__leave_type",
+                "covering_person",
+                "staffing_plan_item",
+                "staffing_plan_item__position",
+                "staffing_plan_item__staffing_plan",
+            ),
+            pk=self.kwargs["pk"],
+            company=company,
+        )
+
+        absent_position, absent_shift = _get_person_position_and_shift(
+            company=company,
+            person=cover.absence.person,
+            day_from=cover.absence.date_from,
+            day_to=cover.absence.date_to,
+        )
+
+        covering_position, covering_shift = _get_person_position_and_shift(
+            company=company,
+            person=cover.covering_person,
+            day_from=cover.date_from,
+            day_to=cover.date_to,
+        )
+
+        ctx["cover"] = cover
+        ctx["absent_position"] = absent_position
+        ctx["absent_shift"] = absent_shift
+        ctx["covering_position"] = covering_position
+        ctx["covering_shift"] = covering_shift
+        return ctx
+
+
+class TemporaryCoverUpdateView(LoginRequiredMixin, ActiveCompanyMixin, UpdateView):
+    model = TemporaryCover
+    form_class = TemporaryCoverForm
+    template_name = "staff/cover_form.html"
+
+    def get_queryset(self):
+        company = self.get_active_company()
+        if company is None:
+            return TemporaryCover.objects.none()
+        return TemporaryCover.objects.filter(company=company)
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["company"] = self.get_active_company()
+        return kwargs
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["active_company"] = self.get_active_company()
+        return ctx
+
+    def form_valid(self, form):
+        company = self.get_active_company()
+        if company is None:
+            messages.error(self.request, "Active company is not selected.")
+            return redirect("staff:covers_list")
+
+        form.instance.company = company
+
+        try:
+            response = super().form_valid(form)
+        except ValidationError as e:
+            if hasattr(e, "message_dict"):
+                for field, errors in e.message_dict.items():
+                    if field == "__all__":
+                        for err in errors:
+                            form.add_error(None, err)
+                    else:
+                        for err in errors:
+                            form.add_error(field, err)
+            else:
+                form.add_error(None, str(e))
+            return self.render_to_response(self.get_context_data(form=form))
+
+        messages.success(self.request, "Temporary cover updated.")
+        return response
+
+    def get_success_url(self):
+        return reverse("staff:covers_detail", kwargs={"pk": self.object.pk})
+
+
+class TemporaryCoverDeleteView(LoginRequiredMixin, ActiveCompanyMixin, View):
+    def post(self, request: HttpRequest, pk: int) -> HttpResponse:
+        company = self.get_active_company()
+        if company is None:
+            messages.error(request, "Active company is not selected.")
+            return redirect("staff:covers_list")
+
+        cover = get_object_or_404(
+            TemporaryCover,
+            pk=pk,
+            company=company,
+        )
+
+        leave_pk = cover.absence_id
+        cover.delete()
+        messages.success(request, "Temporary cover deleted.")
+
+        if leave_pk:
+            return redirect("staff:leaves_detail", pk=leave_pk)
+
+        return redirect("staff:covers_list")

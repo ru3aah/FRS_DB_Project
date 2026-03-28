@@ -13,6 +13,11 @@
 
             <a class="btn btn-outline-secondary"
                href="{% url 'staff:index' %}">Staff menu</a>
+
+            {% if object %}
+                <a class="btn btn-outline-secondary"
+                   href="{% url 'staff:covers_detail' object.pk %}">View</a>
+            {% endif %}
         </div>
     </div>
 
@@ -24,7 +29,9 @@
     {% else %}
         <div class="card shadow-sm">
             <div class="card-header">
-                <strong>Add temporary cover</strong>
+                <strong>
+                    {% if object %}Edit temporary cover{% else %}Add temporary cover{% endif %}
+                </strong>
             </div>
 
             <div class="card-body">
@@ -65,14 +72,6 @@
 
                     <div class="form-text mb-3">
                         Cover period must stay inside linked absence period.
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label">Position (plan slot)</label>
-                        {{ form.staffing_plan_item }}
-                        {% if form.staffing_plan_item.errors %}
-                            <div class="text-danger small mt-1">{{ form.staffing_plan_item.errors }}</div>
-                        {% endif %}
                     </div>
 
                     <div class="mb-3">

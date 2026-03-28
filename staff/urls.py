@@ -42,7 +42,10 @@ from .views import (
     StaffRosterView,
     StaffShiftMembershipView,
     TemporaryCoverCreateView,
+    TemporaryCoverDeleteView,
+    TemporaryCoverDetailView,
     TemporaryCoverListView,
+    TemporaryCoverUpdateView,
 )
 
 app_name = "staff"
@@ -184,7 +187,17 @@ urlpatterns = [
     ),
     path(
         "covers/<int:pk>/",
-        RedirectView.as_view(url=reverse_lazy("under_construction")),
+        TemporaryCoverDetailView.as_view(),
         name="covers_detail",
+    ),
+    path(
+        "covers/<int:pk>/edit/",
+        TemporaryCoverUpdateView.as_view(),
+        name="covers_edit",
+    ),
+    path(
+        "covers/<int:pk>/delete/",
+        TemporaryCoverDeleteView.as_view(),
+        name="covers_delete",
     ),
 ]

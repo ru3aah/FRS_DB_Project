@@ -543,36 +543,139 @@ class ShiftMembershipForm(forms.ModelForm):
         )
 
 
+class LeavePersonChoiceField(forms.ModelChoiceField):
+    def __init__(self, *args, company=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.company = company
+
+    def label_from_instance(self, obj: Person) -> str:
+        full_name = " ".join(
+            part for part in [obj.first_name, obj.second_name, obj.family_name] if part
+        ).strip()
+
+        position_name = "No position"
+        shift_label = "No shift"
+
+        if self.company is not None:
+            assignment = (
+                StaffingAssignment.objects.filter(
+                    company=self.company,
+                    person=obj,
+                )
+                .select_related("staffing_plan_item__position")
+                .order_by("-assigned_at", "-pk")
+                .first()
+            )
+
+            if (
+                assignment
+                and assignment.staffing_plan_item
+                and assignment.staffing_plan_item.position
+            ):
+                position_name = (
+                    assignment.staffing_plan_item.position.name_short
+                    or assignment.staffing_plan_item.position.name_long
+                )
+
+            membership = (
+                ShiftMembership.objects.filter(
+                    company=self.company,
+                    person=obj,
+                    is_active=True,
+                )
+                .select_related("shift", "shift__shift_type")
+                .order_by("-assigned_at", "-pk")
+                .first()
+            )
+
+            if membership and membership.shift:
+                if (
+                    membership.shift.shift_type
+                    and membership.shift.shift_type.shift_type_name
+                ):
+                    shift_label = (
+                        f"{membership.shift.shift_number} — "
+                        f"{membership.shift.shift_type.shift_type_name}"
+                    )
+                else:
+                    shift_label = membership.shift.shift_number
+
+        return f"{full_name} | {position_name} | {shift_label}"
+
+
 class StaffAbsenceForm(forms.ModelForm):
     class Meta:
         model = StaffAbsence
         fields = ["person", "leave_type", "date_from", "date_to", "note", "is_active"]
         widgets = {
-            "person": forms.Select(attrs={"class": "form-select"}),
             "leave_type": forms.Select(attrs={"class": "form-select"}),
             "date_from": forms.DateInput(
-                attrs={"type": "date", "class": "form-control"}
+                attrs={
+                    "type": "date",
+                    "class": "form-control",
+                    "placeholder": "YYYY-MM-DD",
+                }
             ),
-            "date_to": forms.DateInput(attrs={"type": "date", "class": "form-control"}),
+            "date_to": forms.DateInput(
+                attrs={
+                    "type": "date",
+                    "class": "form-control",
+                    "placeholder": "YYYY-MM-DD",
+                }
+            ),
             "note": forms.TextInput(attrs={"class": "form-control"}),
             "is_active": forms.CheckboxInput(attrs={"class": "form-check-input"}),
         }
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, company=None, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["person"].queryset = Person.objects.all().order_by(
-            "family_name", "first_name", "second_name"
+        self.company = company
+
+        self.fields["person"] = LeavePersonChoiceField(
+            queryset=Person.objects.none(),
+            widget=forms.Select(attrs={"class": "form-select", "id": "id_person"}),
+            required=True,
+            label="Person",
+            company=company,
         )
-        self.fields["leave_type"].queryset = LeaveType.objects.filter(
-            is_active=True
-        ).order_by("name")
+
+        if company is not None:
+            self.fields["person"].queryset = Person.objects.filter(
+                company=company
+            ).order_by("family_name", "first_name", "second_name")
+            self.fields["leave_type"].queryset = LeaveType.objects.filter(
+                company=company,
+                is_active=True,
+            ).order_by("name")
+        else:
+            self.fields["person"].queryset = Person.objects.none()
+            self.fields["leave_type"].queryset = LeaveType.objects.filter(
+                is_active=True
+            ).order_by("name")
 
     def clean(self):
         cleaned = super().clean()
         df = cleaned.get("date_from")
         dt = cleaned.get("date_to")
+
         if df and dt and dt < df:
             raise ValidationError("date_to must be >= date_from.")
+
+        person = cleaned.get("person")
+        leave_type = cleaned.get("leave_type")
+
+        if self.company is not None:
+            if person and person.company_id != self.company.id:
+                self.add_error(
+                    "person", "Selected person does not belong to active company."
+                )
+
+            if leave_type and leave_type.company_id != self.company.id:
+                self.add_error(
+                    "leave_type",
+                    "Selected leave type does not belong to active company.",
+                )
+
         return cleaned
 
 
