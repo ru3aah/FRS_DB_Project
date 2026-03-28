@@ -13,6 +13,7 @@ from .views import (
     LeaveDocumentDeleteView,
     LeaveDocumentUploadView,
     LeaveListView,
+    LeavePersonPreviewView,
     LeaveTypeCreateView,
     LeaveTypeDeactivateView,
     LeaveTypeListView,
@@ -46,6 +47,7 @@ from .views import (
     TemporaryCoverDetailView,
     TemporaryCoverListView,
     TemporaryCoverUpdateView,
+    CoverFormPreviewView,
 )
 
 app_name = "staff"
@@ -160,6 +162,11 @@ urlpatterns = [
         LeaveTypeDeactivateView.as_view(),
         name="leave_types_delete",
     ),
+    path(
+        "leaves/person-preview/",
+        LeavePersonPreviewView.as_view(),
+        name="leave_person_preview",
+    ),
     path("leaves/<int:pk>/", LeaveDetailView.as_view(), name="leaves_detail"),
     path("leaves/", LeaveListView.as_view(), name="leaves_list"),
     path("leaves/add/", LeaveCreateView.as_view(), name="leaves_add"),
@@ -200,4 +207,5 @@ urlpatterns = [
         TemporaryCoverDeleteView.as_view(),
         name="covers_delete",
     ),
+    path("cover/preview/", CoverFormPreviewView.as_view(), name="cover_form_preview"),
 ]

@@ -1,7 +1,6 @@
 document.addEventListener("DOMContentLoaded", function () {
     initNestedDropdowns();
     initLeaveFormUI();
-    initCoverFormUI();
 });
 
 function initNestedDropdowns() {
@@ -70,54 +69,96 @@ function initLeaveFormUI() {
         return;
     }
 
-    const personMetaId = form.dataset.personMetaId;
-    const metaNode = personMetaId ? document.getElementById(personMetaId) : null;
-
-    let personMeta = {};
-    if (metaNode) {
-        try {
-            personMeta = JSON.parse(metaNode.textContent);
-        } catch (error) {
-            personMeta = {};
-        }
-    }
-
     const personSelect = form.querySelector("#id_person");
-    const positionBox = form.querySelector(".js-person-position-preview");
-    const shiftBox = form.querySelector(".js-person-shift-preview");
     const dateFromInput = form.querySelector("#id_date_from");
     const dateToInput = form.querySelector("#id_date_to");
+    const positionBox = form.querySelector(".js-person-position-preview");
+    const shiftBox = form.querySelector(".js-person-shift-preview");
+    const previewUrl = form.dataset.personPreviewUrl || "";
 
     applyDateInputEnhancements(dateFromInput, dateToInput);
 
-    function updatePersonPreview() {
-        if (!personSelect || !positionBox || !shiftBox) {
-            return;
-        }
-
-        const selectedId = personSelect.value || "";
-        const item = personMeta[selectedId] || {};
-
-        positionBox.textContent = item.position || "—";
-        shiftBox.textContent = item.shift || "—";
-    }
-
-    if (personSelect) {
-        personSelect.addEventListener("change", updatePersonPreview);
-        updatePersonPreview();
-    }
-}
-
-function initCoverFormUI() {
-    const form = document.querySelector(".js-cover-form");
-    if (!form) {
+    if (!personSelect || !positionBox || !shiftBox || !previewUrl) {
         return;
     }
 
-    const dateFromInput = form.querySelector("#id_date_from");
-    const dateToInput = form.querySelector("#id_date_to");
+    let previewTimer = null;
+    let activeController = null;
 
-    applyDateInputEnhancements(dateFromInput, dateToInput);
+    function setPreview(positionText, shiftText) {
+        positionBox.textContent = positionText || "—";
+        shiftBox.textContent = shiftText || "—";
+    }
+
+    function loadPreview() {
+        const personId = (personSelect.value || "").trim();
+        const dateFrom = (dateFromInput?.value || "").trim();
+        const dateTo = (dateToInput?.value || "").trim();
+
+        if (!personId) {
+            setPreview("—", "—");
+            return;
+        }
+
+        const params = new URLSearchParams();
+        params.set("person", personId);
+        if (dateFrom) {
+            params.set("date_from", dateFrom);
+        }
+        if (dateTo) {
+            params.set("date_to", dateTo);
+        }
+
+        if (activeController) {
+            activeController.abort();
+        }
+
+        activeController = new AbortController();
+
+        fetch(`${previewUrl}?${params.toString()}`, {
+            method: "GET",
+            headers: {
+                "X-Requested-With": "XMLHttpRequest"
+            },
+            signal: activeController.signal
+        })
+            .then(function (response) {
+                if (!response.ok) {
+                    throw new Error("Preview request failed.");
+                }
+                return response.json();
+            })
+            .then(function (data) {
+                setPreview(data.position || "—", data.shift || "—");
+            })
+            .catch(function (error) {
+                if (error.name === "AbortError") {
+                    return;
+                }
+                setPreview("—", "—");
+            });
+    }
+
+    function queuePreviewUpdate() {
+        if (previewTimer) {
+            clearTimeout(previewTimer);
+        }
+        previewTimer = setTimeout(loadPreview, 200);
+    }
+
+    personSelect.addEventListener("change", queuePreviewUpdate);
+
+    if (dateFromInput) {
+        dateFromInput.addEventListener("change", queuePreviewUpdate);
+        dateFromInput.addEventListener("input", queuePreviewUpdate);
+    }
+
+    if (dateToInput) {
+        dateToInput.addEventListener("change", queuePreviewUpdate);
+        dateToInput.addEventListener("input", queuePreviewUpdate);
+    }
+
+    queuePreviewUpdate();
 }
 
 function applyDateInputEnhancements(dateFromInput, dateToInput) {
@@ -131,7 +172,6 @@ function applyDateInputEnhancements(dateFromInput, dateToInput) {
         }
 
         input.setAttribute("autocomplete", "off");
-        input.classList.add("frs-date-input");
     });
 
     if (!dateFromInput || !dateToInput) {
@@ -144,3 +184,75 @@ function applyDateInputEnhancements(dateFromInput, dateToInput) {
         }
     });
 }
+
+
+// ===== Cover form preview =====
+document.addEventListener("DOMContentLoaded", function () {
+    const absenceSelect = document.getElementById("id_absence");
+    const dateFrom = document.getElementById("id_date_from");
+    const dateTo = document.getElementById("id_date_to");
+    const select = document.getElementById("id_covering_person");
+
+    if (!absenceSelect || !dateFrom || !select) return;
+
+    function updatePreview() {
+        const absence = absenceSelect.value;
+        const df = dateFrom.value;
+        const dt = dateTo ? dateTo.value : "";
+
+        if (!absence || !df) return;
+
+        fetch(`/staff/cover/preview/?absence=${absence}&date_from=${df}&date_to=${dt}`)
+            .then(r => r.json())
+            .then(data => {
+                const items = data.items || [];
+
+                const current = select.value;
+
+                select.innerHTML = "";
+
+                const groupBest = document.createElement("optgroup");
+                groupBest.label = "Recommended";
+
+                const groupAll = document.createElement("optgroup");
+                groupAll.label = "All";
+
+                items.forEach(item => {
+                    const opt = document.createElement("option");
+                    opt.value = item.id;
+
+                    let label = item.name;
+
+                    if (item.position) {
+                        label += ` (${item.position})`;
+                    }
+
+                    if (item.busy) {
+                        label += " — busy";
+                    }
+
+                    opt.textContent = label;
+
+                    if (item.score >= 3) {
+                        groupBest.appendChild(opt);
+                    } else {
+                        groupAll.appendChild(opt);
+                    }
+                });
+
+                if (groupBest.children.length) {
+                    select.appendChild(groupBest);
+                }
+
+                select.appendChild(groupAll);
+
+                select.value = current;
+            });
+    }
+
+    absenceSelect.addEventListener("change", updatePreview);
+    dateFrom.addEventListener("change", updatePreview);
+    if (dateTo) {
+        dateTo.addEventListener("change", updatePreview);
+    }
+});

@@ -34,7 +34,7 @@
             <div class="card-body">
                 <form method="post"
                       class="js-leave-form"
-                      data-person-meta-id="leave-person-meta">
+                      data-person-preview-url="{% url 'staff:leave_person_preview' %}">
                     {% csrf_token %}
 
                     {% if form.non_field_errors %}
@@ -55,16 +55,14 @@
 
                         <div class="col-md-3">
                             <label class="form-label">Position</label>
-                            <div id="person-position-preview"
-                                 class="form-control bg-light js-person-position-preview">
+                            <div id="person-position-preview" class="form-control bg-light js-person-position-preview">
                                 —
                             </div>
                         </div>
 
                         <div class="col-md-3">
                             <label class="form-label">Shift</label>
-                            <div id="person-shift-preview"
-                                 class="form-control bg-light js-person-shift-preview">
+                            <div id="person-shift-preview" class="form-control bg-light js-person-shift-preview">
                                 —
                             </div>
                         </div>
@@ -134,6 +132,4 @@
         </div>
 
     </div>
-
-    {{ person_meta|json_script:"leave-person-meta" }}
 {% endblock %}

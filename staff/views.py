@@ -10,7 +10,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.db.models import Prefetch, Q
-from django.http import HttpRequest, HttpResponse
+from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
@@ -242,6 +242,96 @@ def _get_person_position_and_shift(
     shift = membership.shift if membership else None
 
     return position, shift
+
+
+def _format_shift_label(shift: Shift | None) -> str:
+    if shift is None:
+        return "—"
+
+    shift_number = (shift.shift_number or "").strip()
+    shift_type_name = ""
+
+    if getattr(shift, "shift_type", None) is not None:
+        shift_type_name = (shift.shift_type.shift_type_name or "").strip()
+
+    if shift_number and shift_type_name:
+        return f"{shift_number} — {shift_type_name}"
+
+    if shift_number:
+        return shift_number
+
+    if shift_type_name:
+        return shift_type_name
+
+    return "—"
+
+
+class LeavePersonPreviewView(LoginRequiredMixin, ActiveCompanyMixin, View):
+    def get(self, request: HttpRequest, *args, **kwargs) -> JsonResponse:
+        company = self.get_active_company()
+        if company is None:
+            return JsonResponse(
+                {
+                    "position": "—",
+                    "shift": "—",
+                }
+            )
+
+        person_raw = (request.GET.get("person") or "").strip()
+        date_from = _parse_date_from_post(request.GET.get("date_from"))
+        date_to = _parse_date_from_post(request.GET.get("date_to"))
+
+        if not person_raw.isdigit():
+            return JsonResponse(
+                {
+                    "position": "—",
+                    "shift": "—",
+                }
+            )
+
+        person = Person.objects.filter(
+            pk=int(person_raw),
+            company=company,
+        ).first()
+
+        if person is None:
+            return JsonResponse(
+                {
+                    "position": "—",
+                    "shift": "—",
+                }
+            )
+
+        if date_from is None and date_to is None:
+            date_from = timezone.localdate()
+            date_to = date_from
+        elif date_from is None:
+            date_from = date_to
+        elif date_to is None:
+            date_to = date_from
+
+        position, shift = _get_person_position_and_shift(
+            company=company,
+            person=person,
+            day_from=date_from,
+            day_to=date_to,
+        )
+
+        if position is not None:
+            position_label = (
+                (position.name_long or "").strip()
+                or (position.name_short or "").strip()
+                or "—"
+            )
+        else:
+            position_label = "—"
+
+        return JsonResponse(
+            {
+                "position": position_label,
+                "shift": _format_shift_label(shift),
+            }
+        )
 
 
 def _build_leave_person_meta(company: Company) -> dict[str, dict[str, str]]:
@@ -2666,3 +2756,95 @@ class TemporaryCoverDeleteView(LoginRequiredMixin, ActiveCompanyMixin, View):
             return redirect("staff:leaves_detail", pk=leave_pk)
 
         return redirect("staff:covers_list")
+
+
+def _dates_overlap(a_start, a_end, b_start, b_end):
+    if not a_end:
+        a_end = date.max
+    if not b_end:
+        b_end = date.max
+    return not (a_end < b_start or b_end < a_start)
+
+
+def _assignment_conflict_q(start, end):
+    if not end:
+        return Q(assigned_at__lte=start) & (
+            Q(released_at__isnull=True) | Q(released_at__gte=start)
+        )
+    return Q(assigned_at__lte=end) & (
+        Q(released_at__isnull=True) | Q(released_at__gte=start)
+    )
+
+
+class CoverFormPreviewView(View):
+    def get(self, request):
+        absence_id = request.GET.get("absence")
+        date_from = request.GET.get("date_from")
+        date_to = request.GET.get("date_to")
+
+        if not absence_id or not date_from:
+            return JsonResponse({"items": []})
+
+        from persons.models import Person
+        from staff.models import StaffAbsence, StaffingAssignment, TemporaryCover
+
+        try:
+            absence = StaffAbsence.objects.select_related("person").get(pk=absence_id)
+        except StaffAbsence.DoesNotExist:
+            return JsonResponse({"items": []})
+
+        try:
+            start = date.fromisoformat(date_from)
+            end = date.fromisoformat(date_to) if date_to else None
+        except ValueError:
+            return JsonResponse({"items": []})
+
+        qs = Person.objects.filter(company=absence.company)
+
+        assignments = (
+            StaffingAssignment.objects.filter(person__in=qs)
+            .filter(_assignment_conflict_q(start, end))
+            .select_related("staffing_plan_item__position")
+        )
+
+        covers = TemporaryCover.objects.filter(
+            covering_person__in=qs,
+            is_active=True,
+        )
+
+        items = []
+
+        for person in qs:
+            a = next((x for x in assignments if x.person_id == person.id), None)
+
+            position = a.staffing_plan_item.position.name_short if a else None
+
+            busy = False
+
+            if a:
+                busy = True
+
+            for c in covers:
+                if c.covering_person_id == person.id:
+                    if _dates_overlap(start, end, c.date_from, c.date_to):
+                        busy = True
+
+            score = 0
+            if position:
+                score += 2
+            if not busy:
+                score += 2
+
+            items.append(
+                {
+                    "id": person.id,
+                    "name": str(person),
+                    "position": position,
+                    "busy": busy,
+                    "score": score,
+                }
+            )
+
+        items = sorted(items, key=lambda x: (-x["score"], x["name"]))
+
+        return JsonResponse({"items": items})

@@ -4,9 +4,8 @@ from datetime import date, timedelta
 
 from django import forms
 from django.core.exceptions import ValidationError
-from django.forms import inlineformset_factory
 from django.db import models
-
+from django.forms import inlineformset_factory
 
 from persons.models import Person
 

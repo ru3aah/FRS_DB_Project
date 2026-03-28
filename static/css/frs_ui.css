@@ -106,3 +106,12 @@
   font-size: 0.9rem;
   color: #495057;
 }
+
+/* Cover preview */
+select optgroup[label="Recommended"] {
+    font-weight: 600;
+}
+
+select option {
+    font-size: 0.95rem;
+}
