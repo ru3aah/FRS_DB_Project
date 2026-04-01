@@ -46,13 +46,16 @@
                         <div class="col-md-6 mb-3">
                             <label class="form-label">Person</label>
                             {{ form.person }}
+                            <div class="form-text">
+                                Dropdown shows: person | base position | shift
+                            </div>
                             {% if form.person.errors %}
                                 <div class="text-danger small mt-1">{{ form.person.errors }}</div>
                             {% endif %}
                         </div>
 
                         <div class="col-md-6 mb-3">
-                            <label class="form-label">Position</label>
+                            <label class="form-label">Extra work position</label>
                             {{ form.position }}
                             {% if form.position.errors %}
                                 <div class="text-danger small mt-1">{{ form.position.errors }}</div>
@@ -62,14 +65,22 @@
 
                     <div class="row">
                         <div class="col-md-4 mb-3">
-                            <label class="form-label">Day</label>
-                            {{ form.day }}
-                            {% if form.day.errors %}
-                                <div class="text-danger small mt-1">{{ form.day.errors }}</div>
+                            <label class="form-label">Date from</label>
+                            {{ form.date_from }}
+                            {% if form.date_from.errors %}
+                                <div class="text-danger small mt-1">{{ form.date_from.errors }}</div>
                             {% endif %}
                         </div>
 
-                        <div class="col-md-8 mb-3">
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Date to</label>
+                            {{ form.date_to }}
+                            {% if form.date_to.errors %}
+                                <div class="text-danger small mt-1">{{ form.date_to.errors }}</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="col-md-4 mb-3">
                             <label class="form-label">Note</label>
                             {{ form.note }}
                             {% if form.note.errors %}

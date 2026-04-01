@@ -107,7 +107,8 @@
                                     <th class="roster-day-col">
                                         {% if cell != "--" %}
                                             {% with shift_num=cell|slice:"1:" %}
-                                                <span class="roster-pattern-chip roster-pattern-{{ pattern.pattern_key }} roster-shift-num-{{ shift_num }}">
+                                                <span class="roster-pattern-chip roster-pattern-{{ pattern.pattern_key }} roster-shift-num-{{ shift_num }}"
+                                                      title="Shift pattern {{ cell }}">
                                                     {{ cell }}
                                                 </span>
                                             {% endwith %}
@@ -139,17 +140,33 @@
                                     {% for cell in row.cells %}
                                         <td class="roster-day-col">
                                             {% if cell.kind == "wd" %}
-                                                <span class="frs-code-cell roster-cell roster-cell-wd">{{ cell.code }}</span>
+                                                <span class="frs-code-cell roster-cell roster-cell-wd"
+                                                      title="Working day">
+                                                    {{ cell.code }}
+                                                </span>
                                             {% elif cell.kind == "nn" %}
-                                                <span class="frs-code-cell roster-cell roster-cell-nn">{{ cell.code }}</span>
+                                                <span class="frs-code-cell roster-cell roster-cell-nn"
+                                                      title="Non-working day">
+                                                    {{ cell.code }}
+                                                </span>
                                             {% elif cell.kind == "leave" %}
-                                                <span class="frs-code-cell roster-cell roster-cell-leave">{{ cell.code }}</span>
+                                                <span class="frs-code-cell roster-cell roster-cell-leave"
+                                                      title="Leave: {{ cell.code }}">
+                                                    {{ cell.code }}
+                                                </span>
                                             {% elif cell.kind == "cover" %}
-                                                <span class="frs-code-cell roster-cell roster-cell-cover">{{ cell.code }}</span>
+                                                <span class="frs-code-cell roster-cell roster-cell-cover"
+                                                      title="Temporary cover: {{ cell.code }}">
+                                                    {{ cell.code }}
+                                                </span>
                                             {% elif cell.kind == "extra" %}
-                                                <span class="frs-code-cell roster-cell roster-cell-extra">{{ cell.code }}</span>
+                                                <span class="frs-code-cell roster-cell roster-cell-extra"
+                                                      title="Extra day: {{ cell.code }}">
+                                                    {{ cell.code }}
+                                                </span>
                                             {% else %}
-                                                <span class="frs-code-cell frs-text-muted">--</span>
+                                                <span class="frs-code-cell frs-text-muted"
+                                                      title="No data">--</span>
                                             {% endif %}
                                         </td>
                                     {% endfor %}

@@ -623,11 +623,13 @@ def _get_work_override_code_for_day(
     extra_work = (
         ExtraWork.objects.filter(
             company_id=company_id,
-            day=day,
             person_id=person_id,
             is_active=True,
+            date_from__lte=day,
+            date_to__gte=day,
         )
         .select_related("position")
+        .order_by("-date_from", "-pk")
         .first()
     )
     if extra_work and extra_work.position:
@@ -852,10 +854,12 @@ class StaffRosterView(LoginRequiredMixin, ActiveCompanyMixin, TemplateView):
                     ExtraWork.objects.filter(
                         company=company,
                         person=person,
-                        day=day,
                         is_active=True,
+                        date_from__lte=day,
+                        date_to__gte=day,
                     )
                     .select_related("position")
+                    .order_by("-date_from", "-pk")
                     .first()
                 )
                 if extra_work and extra_work.position:
@@ -2577,7 +2581,7 @@ class ExtraWorkListView(LoginRequiredMixin, ActiveCompanyMixin, ListView):
         qs = (
             ExtraWork.objects.filter(company=company)
             .select_related("person", "position")
-            .order_by("-day", "-created_at")
+            .order_by("-date_from", "-created_at")
         )
 
         if self.request.GET.get("show") != "all":
@@ -2587,8 +2591,23 @@ class ExtraWorkListView(LoginRequiredMixin, ActiveCompanyMixin, ListView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["active_company"] = self.get_active_company()
+        company = self.get_active_company()
+        ctx["active_company"] = company
         ctx["show_all"] = self.request.GET.get("show") == "all"
+
+        if company is None:
+            return ctx
+
+        for item in ctx["items"]:
+            base_position, shift = _get_person_position_and_shift(
+                company=company,
+                person=item.person,
+                day_from=item.date_from,
+                day_to=item.date_to,
+            )
+            item.base_position = base_position
+            item.base_shift_label = _format_shift_label(shift)
+
         return ctx
 
 

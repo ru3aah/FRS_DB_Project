@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime
 
 from django import forms
 from django.core.exceptions import ValidationError
@@ -998,14 +998,83 @@ class TemporaryCoverForm(forms.ModelForm):
 from .models import ExtraWork
 
 
+class ExtraWorkPersonChoiceField(forms.ModelChoiceField):
+    def __init__(self, *args, company=None, date_from=None, date_to=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.company = company
+        self.date_from = date_from
+        self.date_to = date_to
+
+    def label_from_instance(self, obj: Person) -> str:
+        full_name = " ".join(
+            part for part in [obj.first_name, obj.second_name, obj.family_name] if part
+        ).strip()
+
+        position_name = "No base position"
+        shift_label = "No shift"
+
+        if self.company is not None:
+            assignment_qs = StaffingAssignment.objects.filter(
+                company=self.company,
+                person=obj,
+            ).select_related("staffing_plan_item__position")
+
+            if self.date_from and self.date_to:
+                assignment_qs = assignment_qs.filter(
+                    assigned_at__date__lte=self.date_to
+                ).filter(
+                    models.Q(released_at__isnull=True)
+                    | models.Q(released_at__date__gte=self.date_from)
+                )
+
+            assignment = assignment_qs.order_by("-assigned_at", "-pk").first()
+
+            if (
+                assignment
+                and assignment.staffing_plan_item
+                and assignment.staffing_plan_item.position
+            ):
+                position_name = (
+                    assignment.staffing_plan_item.position.name_short
+                    or assignment.staffing_plan_item.position.name_long
+                )
+
+            membership = (
+                ShiftMembership.objects.filter(
+                    company=self.company,
+                    person=obj,
+                    is_active=True,
+                )
+                .select_related("shift", "shift__shift_type")
+                .order_by("-assigned_at", "-pk")
+                .first()
+            )
+
+            if membership and membership.shift:
+                if (
+                    membership.shift.shift_type
+                    and membership.shift.shift_type.shift_type_name
+                ):
+                    shift_label = (
+                        f"{membership.shift.shift_number} — "
+                        f"{membership.shift.shift_type.shift_type_name}"
+                    )
+                else:
+                    shift_label = membership.shift.shift_number
+
+        return f"{full_name} | {position_name} | {shift_label}"
+
+
 class ExtraWorkForm(forms.ModelForm):
     class Meta:
         model = ExtraWork
-        fields = ["person", "position", "day", "note", "is_active"]
+        fields = ["person", "position", "date_from", "date_to", "note", "is_active"]
         widgets = {
-            "person": forms.Select(attrs={"class": "form-select"}),
             "position": forms.Select(attrs={"class": "form-select"}),
-            "day": forms.DateInput(attrs={"type": "date", "class": "form-control"}),
+            "date_from": forms.DateInput(
+                attrs={"type": "date", "class": "form-control"}
+            ),
+            "date_to": forms.DateInput(attrs={"type": "date", "class": "form-control"}),
             "note": forms.TextInput(attrs={"class": "form-control"}),
             "is_active": forms.CheckboxInput(attrs={"class": "form-check-input"}),
         }
@@ -1014,7 +1083,47 @@ class ExtraWorkForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.company = company
 
-        self.fields["person"].queryset = Person.objects.none()
+        date_from = None
+        date_to = None
+
+        if self.is_bound:
+            raw_date_from = self.data.get("date_from")
+            raw_date_to = self.data.get("date_to")
+            try:
+                date_from = (
+                    datetime.strptime(raw_date_from, "%Y-%m-%d").date()
+                    if raw_date_from
+                    else None
+                )
+            except (TypeError, ValueError):
+                date_from = None
+
+            try:
+                date_to = (
+                    datetime.strptime(raw_date_to, "%Y-%m-%d").date()
+                    if raw_date_to
+                    else None
+                )
+            except (TypeError, ValueError):
+                date_to = None
+
+        elif self.instance and self.instance.pk:
+            date_from = self.instance.date_from
+            date_to = self.instance.date_to
+
+        initial_person = self.initial.get("person")
+
+        self.fields["person"] = ExtraWorkPersonChoiceField(
+            queryset=Person.objects.none(),
+            widget=forms.Select(attrs={"class": "form-select"}),
+            required=True,
+            label="Person",
+            company=company,
+            date_from=date_from,
+            date_to=date_to,
+            initial=initial_person,
+        )
+
         self.fields["position"].queryset = Position.objects.none()
 
         if company is not None:
@@ -1032,62 +1141,56 @@ class ExtraWorkForm(forms.ModelForm):
 
         person = cleaned.get("person")
         position = cleaned.get("position")
-        day = cleaned.get("day")
+        date_from = cleaned.get("date_from")
+        date_to = cleaned.get("date_to")
 
         if self.company is None:
             raise ValidationError("Active company is not selected.")
 
-        if not person or not position or not day:
+        if date_from and date_to and date_to < date_from:
+            self.add_error(
+                "date_to",
+                "End date cannot be earlier than start date.",
+            )
+
+        if not person or not position or not date_from or not date_to:
             return cleaned
 
         if person.company_id != self.company.id:
             self.add_error(
-                "person", "Selected person does not belong to active company."
+                "person",
+                "Selected person does not belong to active company.",
             )
 
         if position.company_id != self.company.id:
             self.add_error(
-                "position", "Selected position does not belong to active company."
+                "position",
+                "Selected position does not belong to active company.",
             )
 
         if self.errors:
             return cleaned
 
-        assignment = (
+        assignments = (
             StaffingAssignment.objects.filter(
                 company=self.company,
                 person=person,
-                assigned_at__date__lte=day,
+                assigned_at__date__lte=date_to,
             )
             .filter(
                 models.Q(released_at__isnull=True)
-                | models.Q(released_at__date__gte=day)
+                | models.Q(released_at__date__gte=date_from)
             )
             .select_related("staffing_plan_item__position")
             .order_by("-assigned_at", "-pk")
-            .first()
         )
 
-        if assignment is None or assignment.staffing_plan_item is None:
+        if not assignments.exists():
             self.add_error(
                 "person",
-                "This person has no base staffing assignment on the selected day.",
+                "This person has no base staffing assignment in the selected period.",
             )
             return cleaned
-
-        base_position = assignment.staffing_plan_item.position
-        if base_position is None:
-            self.add_error(
-                "person",
-                "Cannot determine base position for the selected person on this day.",
-            )
-            return cleaned
-
-        if position.pk != base_position.pk:
-            self.add_error(
-                "position",
-                "Extra day position must match the person's base position on the selected day.",
-            )
 
         membership = (
             ShiftMembership.objects.filter(
@@ -1107,10 +1210,26 @@ class ExtraWorkForm(forms.ModelForm):
             )
             return cleaned
 
-        if membership.shift.anchor_date and membership.shift.is_on_duty(day):
+        regular_duty_days = False
+
+        current_day = date_from
+        while current_day <= date_to:
+            if membership.shift.anchor_date and membership.shift.is_on_duty(
+                current_day
+            ):
+                regular_duty_days = True
+                break
+
+            current_day += timedelta(days=1)
+
+        if regular_duty_days:
             self.add_error(
-                "day",
-                "Selected day is already a regular duty day for this person. Extra day must be outside the base schedule.",
+                "date_from",
+                "Selected period contains regular duty day(s). Extra work must be outside the base schedule.",
+            )
+            self.add_error(
+                "date_to",
+                "Selected period contains regular duty day(s). Extra work must be outside the base schedule.",
             )
 
         return cleaned

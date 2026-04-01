@@ -8,6 +8,10 @@ from .views import (
     AssignmentReleaseView,
     AssignmentsView,
     CoverFormPreviewView,
+    ExtraWorkCreateView,
+    ExtraWorkDeleteView,
+    ExtraWorkListView,
+    ExtraWorkUpdateView,
     LeaveCreateView,
     LeaveDeleteView,
     LeaveDetailView,
@@ -48,10 +52,6 @@ from .views import (
     TemporaryCoverDetailView,
     TemporaryCoverListView,
     TemporaryCoverUpdateView,
-    ExtraWorkDeleteView,
-    ExtraWorkUpdateView,
-    ExtraWorkCreateView,
-    ExtraWorkListView,
 )
 
 app_name = "staff"

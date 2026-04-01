@@ -15,19 +15,20 @@ def _person_has_nonbase_day_override(
     *,
     company_id: int | None,
     person_id: int | None,
-    day: date | None,
+    date_from: date | None,
+    date_to: date | None,
     exclude_temporary_cover_id: int | None = None,
     exclude_extra_work_id: int | None = None,
 ) -> bool:
-    if not company_id or not person_id or not day:
+    if not company_id or not person_id or not date_from or not date_to:
         return False
 
     temp_cover_qs = TemporaryCover.objects.filter(
         company_id=company_id,
         covering_person_id=person_id,
         is_active=True,
-        date_from__lte=day,
-        date_to__gte=day,
+        date_from__lte=date_to,
+        date_to__gte=date_from,
     )
     if exclude_temporary_cover_id:
         temp_cover_qs = temp_cover_qs.exclude(pk=exclude_temporary_cover_id)
@@ -38,8 +39,9 @@ def _person_has_nonbase_day_override(
     extra_work_qs = ExtraWork.objects.filter(
         company_id=company_id,
         person_id=person_id,
-        day=day,
         is_active=True,
+        date_from__lte=date_to,
+        date_to__gte=date_from,
     )
     if exclude_extra_work_id:
         extra_work_qs = extra_work_qs.exclude(pk=exclude_extra_work_id)
@@ -51,8 +53,8 @@ def _person_has_nonbase_day_override(
         company_id=company_id,
         person_id=person_id,
         is_active=True,
-        date_from__lte=day,
-        date_to__gte=day,
+        date_from__lte=date_to,
+        date_to__gte=date_from,
     )
 
     return leave_qs.exists()
@@ -937,13 +939,9 @@ class TemporaryCover(models.Model):
             company_id=self.company_id,
             person_id=self.covering_person_id,
             is_active=True,
-            day__gte=self.date_from,
-            day__lte=self.date_to,
+            date_from__lte=self.date_to,
+            date_to__gte=self.date_from,
         )
-        if self.pk:
-            extra_work_overlap_qs = extra_work_overlap_qs.exclude(
-                pk=self.pk  # harmless safeguard if ids ever overlap by queryset reuse
-            )
 
         if extra_work_overlap_qs.exists():
             raise ValidationError(
@@ -1030,7 +1028,8 @@ class ExtraWork(models.Model):
         related_name="extra_works",
     )
 
-    day = models.DateField(db_index=True)
+    date_from = models.DateField(db_index=True)
+    date_to = models.DateField(db_index=True)
 
     position = models.ForeignKey(
         Position,
@@ -1038,7 +1037,7 @@ class ExtraWork(models.Model):
         related_name="extra_works",
         blank=True,
         null=True,
-        help_text="Position worked on this extra day. This is outside staffing plan slots.",
+        help_text="Position worked in this extra-work period. This is outside staffing plan slots.",
     )
 
     note = models.CharField(max_length=255, blank=True, default="")
@@ -1047,16 +1046,25 @@ class ExtraWork(models.Model):
 
     class Meta:
         db_table = "staff_extra_works"
-        ordering = ["-created_at"]
+        ordering = ["-date_from", "-created_at"]
         constraints = [
+            models.CheckConstraint(
+                condition=Q(date_to__gte=models.F("date_from")),
+                name="ck_extra_work_date_to_gte_from",
+            ),
             models.UniqueConstraint(
-                fields=["company", "person", "day"],
-                name="uq_extra_work_company_person_day",
+                fields=["company", "person", "date_from", "date_to"],
+                name="uq_extra_work_company_person_period",
             ),
         ]
 
     def clean(self):
         super().clean()
+
+        if self.date_from and self.date_to and self.date_to < self.date_from:
+            raise ValidationError(
+                {"date_to": "Extra work end date cannot be earlier than start date."}
+            )
 
         if (
             self.position_id
@@ -1064,19 +1072,25 @@ class ExtraWork(models.Model):
             and self.position.company_id != self.company_id
         ):
             raise ValidationError(
-                {"position": "Extra day position company must match extra day company."}
+                {
+                    "position": "Extra work position company must match extra work company."
+                }
             )
+
+        if not self.person_id or not self.date_from or not self.date_to:
+            return
 
         if _person_has_nonbase_day_override(
             company_id=self.company_id,
             person_id=self.person_id,
-            day=self.day,
+            date_from=self.date_from,
+            date_to=self.date_to,
             exclude_extra_work_id=self.pk,
         ):
             raise ValidationError(
                 {
                     "person": (
-                        "This person already has another day override on this day "
+                        "This person already has another non-base override in this period "
                         "(temporary cover, extra work, or leave)."
                     )
                 }
@@ -1087,7 +1101,7 @@ class ExtraWork(models.Model):
         return super().save(*args, **kwargs)
 
     def __str__(self) -> str:
-        return f"{self.person} extra work on {self.day}"
+        return f"{self.person} extra work {self.date_from}..{self.date_to}"
 
 
 class ExtraWorkDocument(models.Model):

@@ -54,9 +54,11 @@
                             <thead>
                             <tr>
                                 <th>ID</th>
-                                <th>Day</th>
+                                <th>Period</th>
                                 <th>Person</th>
-                                <th>Position</th>
+                                <th>Base position</th>
+                                <th>Shift</th>
+                                <th>Extra work position</th>
                                 <th>Note</th>
                                 <th>Active</th>
                                 <th class="text-end">Actions</th>
@@ -66,8 +68,20 @@
                             {% for item in items %}
                                 <tr>
                                     <td>{{ item.pk }}</td>
-                                    <td>{{ item.day|date:"SHORT_DATE_FORMAT" }}</td>
+                                    <td>
+                                        {{ item.date_from|date:"SHORT_DATE_FORMAT" }}
+                                        —
+                                        {{ item.date_to|date:"SHORT_DATE_FORMAT" }}
+                                    </td>
                                     <td>{{ item.person }}</td>
+                                    <td>
+                                        {% if item.base_position %}
+                                            {{ item.base_position.name_long }}
+                                        {% else %}
+                                            —
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ item.base_shift_label|default:"—" }}</td>
                                     <td>
                                         {% if item.position %}
                                             {{ item.position.name_long }}
