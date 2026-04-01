@@ -11,15 +11,15 @@
 }
 
 .roster-col-shift {
-  width: 90px;
-  min-width: 90px;
-  max-width: 90px;
+  width: 44px;
+  min-width: 44px;
+  max-width: 44px;
 }
 
 .roster-col-position {
-  width: 180px;
-  min-width: 180px;
-  max-width: 180px;
+  width: 44px;
+  min-width: 44px;
+  max-width: 44px;
 }
 
 .roster-day-col {
@@ -81,29 +81,26 @@
   background: #e9ecef;
 }
 
-/* text color by shift number inside pattern */
-
 .roster-shift-num-1 {
-  color: #0d6efd; /* blue */
+  color: #0d6efd;
 }
 
 .roster-shift-num-2 {
-  color: #198754; /* green */
+  color: #198754;
 }
 
 .roster-shift-num-3 {
-  color: #dc3545; /* red */
+  color: #dc3545;
 }
 
 .roster-shift-num-4 {
-  color: #6f42c1; /* purple */
+  color: #6f42c1;
 }
 
 .roster-shift-num-5 {
-  color: #fd7e14; /* orange */
+  color: #fd7e14;
 }
 
-/* fallback */
 .roster-shift-num-default {
   color: #212529;
 }
@@ -152,4 +149,134 @@
   background-color: #198754 !important;
   color: #ffffff !important;
   border-color: #fd7e14 !important;
+}
+
+.frs-scroll-panel {
+  overflow-x: auto;
+  overflow-y: visible;
+  padding-bottom: 18px;
+}
+
+.frs-roster-sheet {
+  display: block;
+  min-width: max-content;
+}
+
+.frs-roster-toolbar {
+  display: block;
+  min-width: max-content;
+  margin-bottom: 0.75rem;
+}
+
+.frs-table-fixed {
+  width: max-content;
+  min-width: max-content;
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: fixed;
+}
+
+/* sticky top rows */
+.frs-sticky-top-1,
+.frs-sticky-top-2 {
+  position: sticky;
+  background: #ffffff;
+}
+
+.frs-sticky-top-1 {
+  top: 0;
+  height: 42px;
+  z-index: 40;
+}
+
+.frs-sticky-top-2 {
+  top: 42px;
+  height: 38px;
+  z-index: 39;
+}
+
+.frs-sticky-top-1 th,
+.frs-sticky-top-2 th {
+  vertical-align: middle;
+  background: #ffffff;
+}
+
+/* sticky left columns */
+.frs-sticky-left-1,
+.frs-sticky-left-2,
+.frs-sticky-left-3,
+.frs-sticky-left-4 {
+  position: sticky;
+  background: #ffffff !important;
+  background-clip: padding-box;
+  z-index: 60;
+}
+
+.frs-sticky-left-1 {
+  left: 0;
+}
+
+.frs-sticky-left-2 {
+  left: 60px;
+}
+
+.frs-sticky-left-3 {
+  left: 280px;
+}
+
+.frs-sticky-left-4 {
+  left: 324px;
+  box-shadow: 6px 0 6px -4px rgba(0, 0, 0, 0.18);
+}
+
+/* header + left intersections must always be above scrolling part */
+thead .frs-sticky-left-1,
+thead .frs-sticky-left-2,
+thead .frs-sticky-left-3,
+thead .frs-sticky-left-4 {
+  background: #ffffff !important;
+  z-index: 70;
+}
+
+/* exact corner priority: first row above second row */
+thead .frs-sticky-top-1.frs-sticky-left-1,
+thead .frs-sticky-top-1.frs-sticky-left-2,
+thead .frs-sticky-top-1.frs-sticky-left-3,
+thead .frs-sticky-top-1.frs-sticky-left-4 {
+  z-index: 81;
+}
+
+thead .frs-sticky-top-2.frs-sticky-left-1,
+thead .frs-sticky-top-2.frs-sticky-left-2,
+thead .frs-sticky-top-2.frs-sticky-left-3,
+thead .frs-sticky-top-2.frs-sticky-left-4 {
+  z-index: 80;
+}
+
+/* weekend highlight */
+.frs-weekend {
+  background-color: #f8d7da !important;
+}
+
+/* group row */
+.frs-group-row td {
+  background: #f8f9fa;
+}
+
+/* links in roster cells */
+.roster-cell-link {
+  text-decoration: none;
+  cursor: pointer;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+
+.roster-cell-link:hover {
+  text-decoration: none;
+  transform: translateY(-1px);
+  box-shadow: 0 0 0 0.12rem rgba(13, 110, 253, 0.15);
+}
+
+.roster-cell-link:focus,
+.roster-cell-link:active {
+  text-decoration: none;
 }

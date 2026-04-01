@@ -593,6 +593,19 @@ def _get_leave_code_for_day(
     return None
 
 
+def _get_leave_item_for_day(
+    absences_by_person: dict[int, list[dict]], person_id: int, day: date
+) -> dict | None:
+    for item in absences_by_person.get(person_id, []):
+        date_from = item.get("date_from")
+        date_to = item.get("date_to")
+
+        if date_from and date_to and date_from <= day <= date_to:
+            return item
+
+    return None
+
+
 def _get_work_override_code_for_day(
     *,
     company_id: int | None,
@@ -755,6 +768,7 @@ class StaffRosterView(LoginRequiredMixin, ActiveCompanyMixin, TemplateView):
         for ab in absences:
             absences_by_person.setdefault(ab.person_id, []).append(
                 {
+                    "absence_id": ab.pk,
                     "date_from": ab.date_from,
                     "date_to": ab.date_to,
                     "leave_code": (
@@ -818,11 +832,24 @@ class StaffRosterView(LoginRequiredMixin, ActiveCompanyMixin, TemplateView):
                     cells.append({"kind": "empty", "code": "--"})
                     continue
 
-                leave_code = _get_leave_code_for_day(
+                leave_item = _get_leave_item_for_day(
                     absences_by_person, person.person_id, day
                 )
-                if leave_code:
-                    cells.append({"kind": "leave", "code": leave_code})
+                if leave_item:
+                    cells.append(
+                        {
+                            "kind": "leave",
+                            "code": leave_item.get("leave_code") or "--",
+                            "url": reverse(
+                                "staff:leaves_detail",
+                                kwargs={"pk": leave_item["absence_id"]},
+                            ),
+                            "title": (
+                                f"Leave: {leave_item.get('leave_code') or '—'} "
+                                f"({leave_item.get('date_from')} – {leave_item.get('date_to')})"
+                            ),
+                        }
+                    )
                     continue
 
                 temp_cover = (
@@ -834,6 +861,7 @@ class StaffRosterView(LoginRequiredMixin, ActiveCompanyMixin, TemplateView):
                         date_to__gte=day,
                     )
                     .select_related("staffing_plan_item__position")
+                    .order_by("-date_from", "-pk")
                     .first()
                 )
                 if (
@@ -846,6 +874,14 @@ class StaffRosterView(LoginRequiredMixin, ActiveCompanyMixin, TemplateView):
                             "kind": "cover",
                             "code": temp_cover.staffing_plan_item.position.roster_code
                             or "--",
+                            "url": reverse(
+                                "staff:covers_detail",
+                                kwargs={"pk": temp_cover.pk},
+                            ),
+                            "title": (
+                                f"Temporary cover: "
+                                f"{temp_cover.date_from} – {temp_cover.date_to}"
+                            ),
                         }
                     )
                     continue
@@ -867,6 +903,14 @@ class StaffRosterView(LoginRequiredMixin, ActiveCompanyMixin, TemplateView):
                         {
                             "kind": "extra",
                             "code": extra_work.position.roster_code or "--",
+                            "url": reverse(
+                                "staff:extra_work_edit",
+                                kwargs={"pk": extra_work.pk},
+                            ),
+                            "title": (
+                                f"Extra work: "
+                                f"{extra_work.date_from} – {extra_work.date_to}"
+                            ),
                         }
                     )
                     continue
@@ -886,8 +930,16 @@ class StaffRosterView(LoginRequiredMixin, ActiveCompanyMixin, TemplateView):
                 {
                     "seq": seq,
                     "person": person,
-                    "position": position.name_long if position else "",
-                    "shift": shift_label,
+                    "position": (
+                        (
+                            position.roster_code
+                            or position.name_short
+                            or position.name_long
+                        )
+                        if position
+                        else "—"
+                    ),
+                    "shift": shift_label if shift_label else "—",
                     "cells": cells,
                 }
             )

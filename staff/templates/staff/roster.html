@@ -10,31 +10,6 @@
     {% include "includes/navbar.html" %}
 
     <div class="container-fluid mt-4">
-        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
-            <div class="d-flex gap-2 flex-wrap">
-                <a class="btn btn-outline-secondary"
-                   href="{% url 'staff:index' %}">Staff menu</a>
-                <a class="btn btn-outline-secondary"
-                   href="{% url 'staff:staff_members' %}">Staff</a>
-            </div>
-
-            <div class="d-flex align-items-center gap-2 flex-wrap">
-                <a class="btn btn-outline-primary btn-sm"
-                   href="?month={{ prev_month_param }}">
-                    ← Prev
-                </a>
-
-                <span class="fw-semibold">
-                    {{ month_start|date:"F Y" }}
-                </span>
-
-                <a class="btn btn-outline-primary btn-sm"
-                   href="?month={{ next_month_param }}">
-                    Next →
-                </a>
-            </div>
-        </div>
-
         {% if not active_company %}
             <div class="alert alert-warning">Active company is not selected.</div>
 
@@ -68,8 +43,35 @@
             {% if not shift_groups %}
                 <div class="alert alert-info">No roster data for selected period.</div>
             {% else %}
+                <div class="frs-roster-toolbar mb-3">
+                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                        <div class="d-flex gap-2 flex-wrap">
+                            <a class="btn btn-outline-secondary"
+                               href="{% url 'staff:index' %}">Staff menu</a>
+                            <a class="btn btn-outline-secondary"
+                               href="{% url 'staff:staff_members' %}">Staff</a>
+                        </div>
+
+                        <div class="d-flex align-items-center gap-2 flex-wrap">
+                            <a class="btn btn-outline-primary btn-sm"
+                               href="?month={{ prev_month_param }}">
+                                ← Prev
+                            </a>
+
+                            <span class="fw-semibold">
+                                {{ month_start|date:"F Y" }}
+                            </span>
+
+                            <a class="btn btn-outline-primary btn-sm"
+                               href="?month={{ next_month_param }}">
+                                Next →
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="frs-scroll-panel">
-                    <table class="table table-sm align-middle text-center frs-table-fixed">
+                    <table class="table table-sm align-middle text-center frs-table-fixed mb-0">
                         <thead>
                         <tr class="frs-sticky-top-1">
                             <th rowspan="{{ pattern_rows|length|add:2 }}"
@@ -79,11 +81,10 @@
                                 class="roster-col-name frs-sticky-left-2">Name
                             </th>
                             <th rowspan="{{ pattern_rows|length|add:2 }}"
-                                class="roster-col-shift frs-sticky-left-3">Shift
+                                class="roster-col-shift frs-sticky-left-3">Sh
                             </th>
                             <th rowspan="{{ pattern_rows|length|add:2 }}"
-                                class="roster-col-position frs-sticky-left-4">
-                                Position
+                                class="roster-col-position frs-sticky-left-4">Pos
                             </th>
 
                             {% for header in day_headers %}
@@ -102,7 +103,7 @@
                         </tr>
 
                         {% for pattern in pattern_rows %}
-                            <tr class="frs-sticky-top-3">
+                            <tr>
                                 {% for cell in pattern.cells %}
                                     <th class="roster-day-col">
                                         {% if cell != "--" %}
@@ -135,7 +136,7 @@
                                     <td class="frs-sticky-left-1">{{ row.seq }}</td>
                                     <td class="text-start frs-sticky-left-2">{{ row.person }}</td>
                                     <td class="frs-sticky-left-3">{{ row.shift }}</td>
-                                    <td class="text-start frs-sticky-left-4">{{ row.position }}</td>
+                                    <td class="frs-sticky-left-4">{{ row.position }}</td>
 
                                     {% for cell in row.cells %}
                                         <td class="roster-day-col">
@@ -144,26 +145,55 @@
                                                       title="Working day">
                                                     {{ cell.code }}
                                                 </span>
+
                                             {% elif cell.kind == "nn" %}
                                                 <span class="frs-code-cell roster-cell roster-cell-nn"
                                                       title="Non-working day">
                                                     {{ cell.code }}
                                                 </span>
+
                                             {% elif cell.kind == "leave" %}
-                                                <span class="frs-code-cell roster-cell roster-cell-leave"
-                                                      title="Leave: {{ cell.code }}">
-                                                    {{ cell.code }}
-                                                </span>
+                                                {% if cell.url %}
+                                                    <a href="{{ cell.url }}"
+                                                       class="frs-code-cell roster-cell roster-cell-leave roster-cell-link"
+                                                       title="{{ cell.title|default:'Leave' }}">
+                                                        {{ cell.code }}
+                                                    </a>
+                                                {% else %}
+                                                    <span class="frs-code-cell roster-cell roster-cell-leave"
+                                                          title="{{ cell.title|default:'Leave' }}">
+                                                        {{ cell.code }}
+                                                    </span>
+                                                {% endif %}
+
                                             {% elif cell.kind == "cover" %}
-                                                <span class="frs-code-cell roster-cell roster-cell-cover"
-                                                      title="Temporary cover: {{ cell.code }}">
-                                                    {{ cell.code }}
-                                                </span>
+                                                {% if cell.url %}
+                                                    <a href="{{ cell.url }}"
+                                                       class="frs-code-cell roster-cell roster-cell-cover roster-cell-link"
+                                                       title="{{ cell.title|default:'Temporary cover' }}">
+                                                        {{ cell.code }}
+                                                    </a>
+                                                {% else %}
+                                                    <span class="frs-code-cell roster-cell roster-cell-cover"
+                                                          title="{{ cell.title|default:'Temporary cover' }}">
+                                                        {{ cell.code }}
+                                                    </span>
+                                                {% endif %}
+
                                             {% elif cell.kind == "extra" %}
-                                                <span class="frs-code-cell roster-cell roster-cell-extra"
-                                                      title="Extra day: {{ cell.code }}">
-                                                    {{ cell.code }}
-                                                </span>
+                                                {% if cell.url %}
+                                                    <a href="{{ cell.url }}"
+                                                       class="frs-code-cell roster-cell roster-cell-extra roster-cell-link"
+                                                       title="{{ cell.title|default:'Extra work' }}">
+                                                        {{ cell.code }}
+                                                    </a>
+                                                {% else %}
+                                                    <span class="frs-code-cell roster-cell roster-cell-extra"
+                                                          title="{{ cell.title|default:'Extra work' }}">
+                                                        {{ cell.code }}
+                                                    </span>
+                                                {% endif %}
+
                                             {% else %}
                                                 <span class="frs-code-cell frs-text-muted"
                                                       title="No data">--</span>
