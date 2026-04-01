@@ -107,3 +107,49 @@
 .roster-shift-num-default {
   color: #212529;
 }
+
+.roster-day-col .roster-cell {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.2rem;
+  padding: 0.18rem 0.42rem;
+  border: 2.5px solid transparent;
+  border-radius: 0.35rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1;
+  background-color: #ffffff !important;
+  color: #212529 !important;
+  box-sizing: border-box;
+}
+
+.roster-day-col .roster-cell-wd {
+  background-color: #198754 !important;
+  color: #ffffff !important;
+  border-color: #198754 !important;
+}
+
+.roster-day-col .roster-cell-nn {
+  background-color: #ffffff !important;
+  color: #6c757d !important;
+  border-color: #6c757d !important;
+}
+
+.roster-day-col .roster-cell-leave {
+  background-color: #ffffff !important;
+  color: #dc3545 !important;
+  border-color: #dc3545 !important;
+}
+
+.roster-day-col .roster-cell-cover {
+  background-color: #ffffff !important;
+  color: #198754 !important;
+  border-color: #198754 !important;
+}
+
+.roster-day-col .roster-cell-extra {
+  background-color: #198754 !important;
+  color: #ffffff !important;
+  border-color: #fd7e14 !important;
+}

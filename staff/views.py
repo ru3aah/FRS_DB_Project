@@ -809,37 +809,72 @@ class StaffRosterView(LoginRequiredMixin, ActiveCompanyMixin, TemplateView):
             cells = []
             for day in days:
                 if start_day and day < start_day:
-                    cells.append("--")
+                    cells.append({"kind": "empty", "code": "--"})
                     continue
 
                 if end_day is not None and day > end_day:
-                    cells.append("--")
+                    cells.append({"kind": "empty", "code": "--"})
                     continue
 
                 leave_code = _get_leave_code_for_day(
                     absences_by_person, person.person_id, day
                 )
                 if leave_code:
-                    cells.append(leave_code)
+                    cells.append({"kind": "leave", "code": leave_code})
                     continue
 
-                work_override_code = _get_work_override_code_for_day(
-                    company_id=company.pk,
-                    person_id=person.person_id,
-                    day=day,
+                temp_cover = (
+                    TemporaryCover.objects.filter(
+                        company=company,
+                        covering_person=person,
+                        is_active=True,
+                        date_from__lte=day,
+                        date_to__gte=day,
+                    )
+                    .select_related("staffing_plan_item__position")
+                    .first()
                 )
-                if work_override_code:
-                    cells.append(work_override_code)
+                if (
+                    temp_cover
+                    and temp_cover.staffing_plan_item
+                    and temp_cover.staffing_plan_item.position
+                ):
+                    cells.append(
+                        {
+                            "kind": "cover",
+                            "code": temp_cover.staffing_plan_item.position.roster_code
+                            or "--",
+                        }
+                    )
+                    continue
+
+                extra_work = (
+                    ExtraWork.objects.filter(
+                        company=company,
+                        person=person,
+                        day=day,
+                        is_active=True,
+                    )
+                    .select_related("position")
+                    .first()
+                )
+                if extra_work and extra_work.position:
+                    cells.append(
+                        {
+                            "kind": "extra",
+                            "code": extra_work.position.roster_code or "--",
+                        }
+                    )
                     continue
 
                 if shift is None or shift.anchor_date is None:
-                    cells.append("--")
+                    cells.append({"kind": "empty", "code": "--"})
                     continue
 
                 if shift.is_on_duty(day):
-                    cells.append("WD")
+                    cells.append({"kind": "wd", "code": "WD"})
                 else:
-                    cells.append("NN")
+                    cells.append({"kind": "nn", "code": "NN"})
 
             shift_label = shift.shift_number if shift else "No shift"
 

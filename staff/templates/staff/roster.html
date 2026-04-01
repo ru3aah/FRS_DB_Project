@@ -138,14 +138,16 @@
 
                                     {% for cell in row.cells %}
                                         <td class="roster-day-col">
-                                            {% if cell == "WD" %}
-                                                <span class="badge bg-success frs-code-cell">WD</span>
-                                            {% elif cell == "NN" %}
-                                                <span class="badge bg-secondary frs-code-cell">NN</span>
-                                            {% elif cell == "--" %}
-                                                <span class="frs-code-cell frs-text-muted">--</span>
-                                            {% elif cell %}
-                                                <span class="frs-code-cell">{{ cell }}</span>
+                                            {% if cell.kind == "wd" %}
+                                                <span class="frs-code-cell roster-cell roster-cell-wd">{{ cell.code }}</span>
+                                            {% elif cell.kind == "nn" %}
+                                                <span class="frs-code-cell roster-cell roster-cell-nn">{{ cell.code }}</span>
+                                            {% elif cell.kind == "leave" %}
+                                                <span class="frs-code-cell roster-cell roster-cell-leave">{{ cell.code }}</span>
+                                            {% elif cell.kind == "cover" %}
+                                                <span class="frs-code-cell roster-cell roster-cell-cover">{{ cell.code }}</span>
+                                            {% elif cell.kind == "extra" %}
+                                                <span class="frs-code-cell roster-cell roster-cell-extra">{{ cell.code }}</span>
                                             {% else %}
                                                 <span class="frs-code-cell frs-text-muted">--</span>
                                             {% endif %}
