@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% block title %}FRS DB | Extra day{% endblock %}
+
+{% block content %}
+{% include "includes/navbar.html" %}
+
+<div class="container mt-4">
+
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+        <div class="d-flex gap-2 flex-wrap">
+            <a class="btn btn-outline-secondary"
+               href="{% url 'staff:extra_work_list' %}">Back to extra days</a>
+
+            <a class="btn btn-outline-secondary"
+               href="{% url 'staff:index' %}">Staff menu</a>
+        </div>
+    </div>
+
+    {% if not active_company %}
+        <div class="alert alert-warning">
+            Active company is not selected.
+        </div>
+    {% else %}
+        <div class="card shadow-sm">
+            <div class="card-header">
+                <strong>
+                    {% if object %}
+                        Edit extra day
+                    {% else %}
+                        Add extra day
+                    {% endif %}
+                </strong>
+            </div>
+
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+
+                    {% if form.non_field_errors %}
+                        <div class="alert alert-danger py-2">
+                            {{ form.non_field_errors }}
+                        </div>
+                    {% endif %}
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Person</label>
+                            {{ form.person }}
+                            {% if form.person.errors %}
+                                <div class="text-danger small mt-1">{{ form.person.errors }}</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Position</label>
+                            {{ form.position }}
+                            {% if form.position.errors %}
+                                <div class="text-danger small mt-1">{{ form.position.errors }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Day</label>
+                            {{ form.day }}
+                            {% if form.day.errors %}
+                                <div class="text-danger small mt-1">{{ form.day.errors }}</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="col-md-8 mb-3">
+                            <label class="form-label">Note</label>
+                            {{ form.note }}
+                            {% if form.note.errors %}
+                                <div class="text-danger small mt-1">{{ form.note.errors }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="form-check mb-3">
+                        {{ form.is_active }}
+                        <label class="form-check-label" for="{{ form.is_active.id_for_label }}">
+                            Active
+                        </label>
+                    </div>
+
+                    <div class="d-flex justify-content-end gap-2">
+                        <a class="btn btn-outline-secondary"
+                           href="{% url 'staff:extra_work_list' %}">
+                            Cancel
+                        </a>
+
+                        <button type="submit" class="btn btn-primary">
+                            Save
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    {% endif %}
+
+</div>
+{% endblock %}

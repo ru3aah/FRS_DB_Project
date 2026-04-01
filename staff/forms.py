@@ -993,3 +993,124 @@ class TemporaryCoverForm(forms.ModelForm):
         if commit:
             obj.save()
         return obj
+
+
+from .models import ExtraWork
+
+
+class ExtraWorkForm(forms.ModelForm):
+    class Meta:
+        model = ExtraWork
+        fields = ["person", "position", "day", "note", "is_active"]
+        widgets = {
+            "person": forms.Select(attrs={"class": "form-select"}),
+            "position": forms.Select(attrs={"class": "form-select"}),
+            "day": forms.DateInput(attrs={"type": "date", "class": "form-control"}),
+            "note": forms.TextInput(attrs={"class": "form-control"}),
+            "is_active": forms.CheckboxInput(attrs={"class": "form-check-input"}),
+        }
+
+    def __init__(self, *args, company=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.company = company
+
+        self.fields["person"].queryset = Person.objects.none()
+        self.fields["position"].queryset = Position.objects.none()
+
+        if company is not None:
+            self.fields["person"].queryset = Person.objects.filter(
+                company=company
+            ).order_by("family_name", "first_name", "second_name")
+
+            self.fields["position"].queryset = Position.objects.filter(
+                company=company,
+                is_active=True,
+            ).order_by("name_long")
+
+    def clean(self):
+        cleaned = super().clean()
+
+        person = cleaned.get("person")
+        position = cleaned.get("position")
+        day = cleaned.get("day")
+
+        if self.company is None:
+            raise ValidationError("Active company is not selected.")
+
+        if not person or not position or not day:
+            return cleaned
+
+        if person.company_id != self.company.id:
+            self.add_error(
+                "person", "Selected person does not belong to active company."
+            )
+
+        if position.company_id != self.company.id:
+            self.add_error(
+                "position", "Selected position does not belong to active company."
+            )
+
+        if self.errors:
+            return cleaned
+
+        assignment = (
+            StaffingAssignment.objects.filter(
+                company=self.company,
+                person=person,
+                assigned_at__date__lte=day,
+            )
+            .filter(
+                models.Q(released_at__isnull=True)
+                | models.Q(released_at__date__gte=day)
+            )
+            .select_related("staffing_plan_item__position")
+            .order_by("-assigned_at", "-pk")
+            .first()
+        )
+
+        if assignment is None or assignment.staffing_plan_item is None:
+            self.add_error(
+                "person",
+                "This person has no base staffing assignment on the selected day.",
+            )
+            return cleaned
+
+        base_position = assignment.staffing_plan_item.position
+        if base_position is None:
+            self.add_error(
+                "person",
+                "Cannot determine base position for the selected person on this day.",
+            )
+            return cleaned
+
+        if position.pk != base_position.pk:
+            self.add_error(
+                "position",
+                "Extra day position must match the person's base position on the selected day.",
+            )
+
+        membership = (
+            ShiftMembership.objects.filter(
+                company=self.company,
+                person=person,
+                is_active=True,
+            )
+            .select_related("shift", "shift__shift_type")
+            .order_by("-assigned_at", "-pk")
+            .first()
+        )
+
+        if membership is None or membership.shift is None:
+            self.add_error(
+                "person",
+                "This person has no active shift membership.",
+            )
+            return cleaned
+
+        if membership.shift.anchor_date and membership.shift.is_on_duty(day):
+            self.add_error(
+                "day",
+                "Selected day is already a regular duty day for this person. Extra day must be outside the base schedule.",
+            )
+
+        return cleaned

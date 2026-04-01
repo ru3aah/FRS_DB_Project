@@ -22,6 +22,7 @@ from persons.models import Person
 
 from .forms import (
     AssignmentCreateForm,
+    ExtraWorkForm,
     ShiftPackageCreateForm,
     ShiftTypeForm,
     StaffAbsenceForm,
@@ -626,15 +627,11 @@ def _get_work_override_code_for_day(
             person_id=person_id,
             is_active=True,
         )
-        .select_related("staffing_plan_item__position")
+        .select_related("position")
         .first()
     )
-    if (
-        extra_work
-        and extra_work.staffing_plan_item
-        and extra_work.staffing_plan_item.position
-    ):
-        return extra_work.staffing_plan_item.position.roster_code or None
+    if extra_work and extra_work.position:
+        return extra_work.position.roster_code or None
 
     return None
 
@@ -2529,6 +2526,111 @@ class LeaveDocumentDeleteView(LoginRequiredMixin, ActiveCompanyMixin, View):
         messages.success(request, "Document deleted.")
 
         return redirect("staff:leaves_detail", pk=leave.pk)
+
+
+class ExtraWorkListView(LoginRequiredMixin, ActiveCompanyMixin, ListView):
+    model = ExtraWork
+    template_name = "staff/extra_work_list.html"
+    context_object_name = "items"
+    paginate_by = 50
+
+    def get_queryset(self):
+        company = self.get_active_company()
+        if company is None:
+            return ExtraWork.objects.none()
+
+        qs = (
+            ExtraWork.objects.filter(company=company)
+            .select_related("person", "position")
+            .order_by("-day", "-created_at")
+        )
+
+        if self.request.GET.get("show") != "all":
+            qs = qs.filter(is_active=True)
+
+        return qs
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["active_company"] = self.get_active_company()
+        ctx["show_all"] = self.request.GET.get("show") == "all"
+        return ctx
+
+
+class ExtraWorkCreateView(LoginRequiredMixin, ActiveCompanyMixin, CreateView):
+    model = ExtraWork
+    form_class = ExtraWorkForm
+    template_name = "staff/extra_work_form.html"
+    success_url = reverse_lazy("staff:extra_work_list")
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["company"] = self.get_active_company()
+        return kwargs
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["active_company"] = self.get_active_company()
+        return ctx
+
+    def form_valid(self, form):
+        company = self.get_active_company()
+        if company is None:
+            messages.error(self.request, "Active company is not selected.")
+            return redirect("staff:extra_work_list")
+
+        form.instance.company = company
+        messages.success(self.request, "Extra work created.")
+        return super().form_valid(form)
+
+
+class ExtraWorkUpdateView(LoginRequiredMixin, ActiveCompanyMixin, UpdateView):
+    model = ExtraWork
+    form_class = ExtraWorkForm
+    template_name = "staff/extra_work_form.html"
+    success_url = reverse_lazy("staff:extra_work_list")
+
+    def get_queryset(self):
+        company = self.get_active_company()
+        if company is None:
+            return ExtraWork.objects.none()
+        return ExtraWork.objects.filter(company=company)
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["company"] = self.get_active_company()
+        return kwargs
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["active_company"] = self.get_active_company()
+        return ctx
+
+    def form_valid(self, form):
+        messages.success(self.request, "Extra work updated.")
+        return super().form_valid(form)
+
+
+class ExtraWorkDeleteView(LoginRequiredMixin, ActiveCompanyMixin, View):
+    def post(self, request: HttpRequest, pk: int) -> HttpResponse:
+        company = self.get_active_company()
+        if company is None:
+            messages.error(request, "Active company is not selected.")
+            return redirect("staff:extra_work_list")
+
+        obj = get_object_or_404(ExtraWork, pk=pk, company=company)
+
+        if obj.is_active:
+            obj.is_active = False
+            obj.save(update_fields=["is_active"])
+            messages.success(request, "Extra work deactivated.")
+        else:
+            messages.info(request, "Extra work is already inactive.")
+
+        if request.GET.get("show") == "all":
+            return redirect(f"{reverse('staff:extra_work_list')}?show=all")
+
+        return redirect("staff:extra_work_list")
 
 
 class TemporaryCoverListView(LoginRequiredMixin, ActiveCompanyMixin, ListView):

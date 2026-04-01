@@ -272,20 +272,22 @@ class ExtraWorkAdmin(admin.ModelAdmin):
         "company",
         "person",
         "day",
-        "staffing_plan_item",
+        "position",
         "is_active",
         "created_at",
     )
-    list_filter = ("company", "day", "is_active")
+    list_filter = ("company", "day", "position", "is_active")
     search_fields = (
         "person__first_name",
         "person__second_name",
         "person__family_name",
+        "position__name_long",
+        "position__name_short",
         "note",
     )
     ordering = ("company", "-created_at")
     readonly_fields = ("created_at",)
-    autocomplete_fields = ("person", "staffing_plan_item")
+    autocomplete_fields = ("person", "position")
     inlines = [ExtraWorkDocumentInline]
 
 

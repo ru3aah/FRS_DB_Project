@@ -7,6 +7,7 @@ from .views import (
     AssignmentReleaseAllView,
     AssignmentReleaseView,
     AssignmentsView,
+    CoverFormPreviewView,
     LeaveCreateView,
     LeaveDeleteView,
     LeaveDetailView,
@@ -47,7 +48,10 @@ from .views import (
     TemporaryCoverDetailView,
     TemporaryCoverListView,
     TemporaryCoverUpdateView,
-    CoverFormPreviewView,
+    ExtraWorkDeleteView,
+    ExtraWorkUpdateView,
+    ExtraWorkCreateView,
+    ExtraWorkListView,
 )
 
 app_name = "staff"
@@ -208,4 +212,16 @@ urlpatterns = [
         name="covers_delete",
     ),
     path("cover/preview/", CoverFormPreviewView.as_view(), name="cover_form_preview"),
+    path("extra-work/", ExtraWorkListView.as_view(), name="extra_work_list"),
+    path("extra-work/add/", ExtraWorkCreateView.as_view(), name="extra_work_add"),
+    path(
+        "extra-work/<int:pk>/edit/",
+        ExtraWorkUpdateView.as_view(),
+        name="extra_work_edit",
+    ),
+    path(
+        "extra-work/<int:pk>/delete/",
+        ExtraWorkDeleteView.as_view(),
+        name="extra_work_delete",
+    ),
 ]

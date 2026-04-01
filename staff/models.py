@@ -24,9 +24,10 @@ def _person_has_nonbase_day_override(
 
     temp_cover_qs = TemporaryCover.objects.filter(
         company_id=company_id,
-        day=day,
         covering_person_id=person_id,
         is_active=True,
+        date_from__lte=day,
+        date_to__gte=day,
     )
     if exclude_temporary_cover_id:
         temp_cover_qs = temp_cover_qs.exclude(pk=exclude_temporary_cover_id)
@@ -36,8 +37,8 @@ def _person_has_nonbase_day_override(
 
     extra_work_qs = ExtraWork.objects.filter(
         company_id=company_id,
-        day=day,
         person_id=person_id,
+        day=day,
         is_active=True,
     )
     if exclude_extra_work_id:
@@ -939,6 +940,11 @@ class TemporaryCover(models.Model):
             day__gte=self.date_from,
             day__lte=self.date_to,
         )
+        if self.pk:
+            extra_work_overlap_qs = extra_work_overlap_qs.exclude(
+                pk=self.pk  # harmless safeguard if ids ever overlap by queryset reuse
+            )
+
         if extra_work_overlap_qs.exists():
             raise ValidationError(
                 {
@@ -1026,13 +1032,13 @@ class ExtraWork(models.Model):
 
     day = models.DateField(db_index=True)
 
-    staffing_plan_item = models.ForeignKey(
-        StaffingPlanItem,
-        on_delete=models.CASCADE,
+    position = models.ForeignKey(
+        Position,
+        on_delete=models.PROTECT,
         related_name="extra_works",
         blank=True,
         null=True,
-        help_text="Optional slot/position for which extra work is performed.",
+        help_text="Position worked on this extra day. This is outside staffing plan slots.",
     )
 
     note = models.CharField(max_length=255, blank=True, default="")
@@ -1053,12 +1059,12 @@ class ExtraWork(models.Model):
         super().clean()
 
         if (
-            self.staffing_plan_item_id
+            self.position_id
             and self.company_id
-            and self.staffing_plan_item.staffing_plan.company_id != self.company_id
+            and self.position.company_id != self.company_id
         ):
             raise ValidationError(
-                {"company": "Extra work company must match staffing plan company."}
+                {"position": "Extra day position company must match extra day company."}
             )
 
         if _person_has_nonbase_day_override(
