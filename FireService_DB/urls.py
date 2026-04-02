@@ -1,7 +1,7 @@
-from django.contrib import admin
-from django.urls import include, path
 from django.conf import settings
 from django.conf.urls.static import static
+from django.contrib import admin
+from django.urls import include, path
 
 from .views import HomeView, MainView, UnderConstructionView
 
@@ -18,6 +18,7 @@ urlpatterns = [
     path("persons/", include(("persons.urls", "persons"), namespace="persons")),
     path("users/", include(("users.urls", "users"), namespace="users")),
     path("staff/", include(("staff.urls", "staff"), namespace="staff")),
+    path("transport/", include(("transport.urls", "transport"), namespace="transport")),
 ]
 
 # DEV only: serve uploaded media files
