@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}FRS DB | Create Transport Type{% endblock %}
+
+{% block content %}
+{% include "includes/navbar.html" %}
+
+<div class="container mt-4">
+
+  <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+    <div class="d-flex gap-2 flex-wrap">
+      <a class="btn btn-outline-secondary" href="{% url 'transport:type_list' %}">
+        Back to list
+      </a>
+    </div>
+  </div>
+
+  <h2 class="mb-3">Create Transport Unit Type</h2>
+
+  <form method="post">
+    {% csrf_token %}
+
+    <div class="card shadow-sm">
+      <div class="card-body">
+
+        <div class="mb-3">
+          <label class="form-label">Name</label>
+          {{ form.name }}
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">Code</label>
+          {{ form.code }}
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">Description</label>
+          {{ form.description }}
+        </div>
+
+        <div class="form-check mb-3">
+          {{ form.is_active }}
+          <label class="form-check-label">
+            Active
+          </label>
+        </div>
+
+      </div>
+
+      <div class="card-footer d-flex justify-content-end gap-2">
+        <a href="{% url 'transport:type_list' %}" class="btn btn-outline-secondary">
+          Cancel
+        </a>
+        <button type="submit" class="btn btn-primary">
+          Save
+        </button>
+      </div>
+    </div>
+
+  </form>
+
+</div>
+{% endblock %}

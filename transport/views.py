@@ -1,4 +1,5 @@
-from django.views.generic import TemplateView, ListView  # noqa: I001
+from django.urls import reverse_lazy
+from django.views.generic import ListView, TemplateView  # noqa: I001
 
 from transport.models import TransportUnit, TransportUnitType
 
@@ -39,3 +40,11 @@ class TransportUnitTypeListView(ListView):
     template_name = "transport/type_list.html"
     context_object_name = "types"
     queryset = TransportUnitType.objects.all().order_by("name")
+
+
+class TransportUnitTypeCreateView(TemplateView):
+    model = TransportUnitType
+    template_name = "transport/type_form.html"
+    fields = ["code", "name", "description", "is_active"]
+    extra_context = {"active_company_id": None}
+    success_url = reverse_lazy("transport:type-list")
