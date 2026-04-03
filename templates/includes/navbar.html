@@ -157,11 +157,41 @@
                   </li>
 
               </ul>
-
           </li>
-          <li class="nav-item">
-              <a class="nav-link" href="{% url 'transport:index' %}">Transport
+
+          <li class="nav-item dropdown">
+              <a class="nav-link dropdown-toggle"
+                 href="#"
+                 id="transportDropdown"
+                 role="button"
+                 data-bs-toggle="dropdown"
+                 aria-expanded="false">
+                  Transport
               </a>
+
+              <ul class="dropdown-menu dropdown-menu-dark bg-primary"
+                  aria-labelledby="transportDropdown">
+                  <li>
+                      <a class="dropdown-item" href="{% url 'transport:index' %}">
+                          Transport menu
+                      </a>
+                  </li>
+
+                  <li>
+                      <hr class="dropdown-divider">
+                  </li>
+
+                  <li>
+                      <a class="dropdown-item" href="{% url 'transport:type_list' %}">
+                          Unit types
+                      </a>
+                  </li>
+                  <li>
+                      <a class="dropdown-item" href="{% url 'transport:unit_list' %}">
+                          Units
+                      </a>
+                  </li>
+              </ul>
           </li>
       </ul>
 
