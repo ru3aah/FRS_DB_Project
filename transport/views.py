@@ -4,7 +4,8 @@ from transport.models import TransportUnit, TransportUnitType
 
 
 class TransportHomeView(TemplateView):
-    template_name = "../templates/under_construction.html"
+    template_name = "transport/index.html"
+    extra_context = {"active_company_id": None}
 
 
 class TransportUnitListView(ListView):
