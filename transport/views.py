@@ -1,6 +1,12 @@
+from django.http import Http404
 from django.urls import reverse_lazy
-from django.views.generic import ListView, TemplateView  # noqa: I001
+from django.views.generic import (
+    CreateView,  # noqa: I001
+    ListView,
+    TemplateView,
+)
 
+from companies.models import Company
 from transport.models import TransportUnit, TransportUnitType
 
 
@@ -32,6 +38,29 @@ class TransportUnitListView(ListView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["active_company_id"] = self.request.session.get("active_company_id")
+        return context
+
+
+class TransportUnitCreateView(CreateView):
+    model = TransportUnit
+    template_name = "transport/unit_form.html"
+    fields = ["name", "type", "identifier", "description", "is_active"]
+    success_url = reverse_lazy("transport:unit_list")
+
+    def dispatch(self, request, *args, **kwargs):
+        self.active_company_id = request.session.get("active_company_id")
+        if not self.active_company_id:
+            raise Http404("Active company is not selected.")
+        return super().dispatch(request, *args, **kwargs)
+
+    def form_valid(self, form):
+        company = Company.objects.get(pk=self.active_company_id)
+        form.instance.company = company
+        return super().form_valid(form)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["active_company_id"] = self.active_company_id
         return context
 
 
