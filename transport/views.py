@@ -1,6 +1,8 @@
 from django import forms
-from django.http import Http404
+from django.db.models import Q
+from django.http import Http404, HttpResponseRedirect
 from django.urls import reverse_lazy
+from django.views import View
 from django.views.generic import CreateView, ListView, TemplateView, UpdateView
 
 from companies.models import Company
@@ -12,7 +14,35 @@ class TransportHomeView(TemplateView):
     extra_context = {"active_company_id": None}
 
 
-class TransportUnitListView(ListView):
+class ActiveCompanyMixin:
+    active_company_id: int | None = None
+
+    def dispatch(self, request, *args, **kwargs):
+        self.active_company_id = request.session.get("active_company_id")
+        if not self.active_company_id:
+            raise Http404("Active company is not selected.")
+        return super().dispatch(request, *args, **kwargs)
+
+
+class ActiveOnlyToggleListMixin:
+    show_all_param = "show"
+
+    def is_show_all(self):
+        return self.request.GET.get(self.show_all_param) == "all"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        active_company_id = self.request.session.get("active_company_id")
+        show_all = self.is_show_all()
+
+        context["active_company_id"] = active_company_id
+        context["show_all"] = show_all
+        context["show_all_url"] = f"{self.request.path}?show=all"
+        context["show_active_url"] = self.request.path
+        return context
+
+
+class TransportUnitListView(ActiveOnlyToggleListMixin, ListView):
     model = TransportUnit
     template_name = "transport/unit_list.html"
     context_object_name = "units"
@@ -32,29 +62,19 @@ class TransportUnitListView(ListView):
 
         if active_company_id:
             queryset = queryset.filter(company_id=active_company_id)
+            if not self.is_show_all():
+                queryset = queryset.filter(is_active=True)
         else:
             queryset = queryset.none()
 
         return queryset
 
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context["active_company_id"] = self.request.session.get("active_company_id")
-        return context
 
-
-class TransportUnitCreateView(CreateView):
-    active_company_id: int | None = None
+class TransportUnitCreateView(ActiveCompanyMixin, CreateView):
     model = TransportUnit
     template_name = "transport/unit_form.html"
     fields = ["name", "model", "identifier", "description", "is_active"]
     success_url = reverse_lazy("transport:unit_list")
-
-    def dispatch(self, request, *args, **kwargs):
-        self.active_company_id = request.session.get("active_company_id")
-        if not self.active_company_id:
-            raise Http404("Active company is not selected.")
-        return super().dispatch(request, *args, **kwargs)
 
     def get_form(self, form_class=None):
         form = super().get_form(form_class)
@@ -79,21 +99,16 @@ class TransportUnitCreateView(CreateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["active_company_id"] = self.active_company_id
+        context["is_edit"] = False
+        context["form_title"] = "Create Transport Unit"
         return context
 
 
-class TransportUnitUpdateView(UpdateView):
-    active_company_id: int | None = None
+class TransportUnitUpdateView(ActiveCompanyMixin, UpdateView):
     model = TransportUnit
     template_name = "transport/unit_form.html"
     fields = ["name", "model", "identifier", "description", "is_active"]
     success_url = reverse_lazy("transport:unit_list")
-
-    def dispatch(self, request, *args, **kwargs):
-        self.active_company_id = request.session.get("active_company_id")
-        if not self.active_company_id:
-            raise Http404("Active company is not selected.")
-        return super().dispatch(request, *args, **kwargs)
 
     def get_queryset(self):
         return TransportUnit.objects.filter(
@@ -104,13 +119,19 @@ class TransportUnitUpdateView(UpdateView):
         form = super().get_form(form_class)
         field = form.fields["model"]
         assert isinstance(field, forms.ModelChoiceField)
+        current_model_id = self.object.model_id
+
         field.queryset = (
             TransportUnitModel.objects.filter(
-                company_id=self.active_company_id,
-                is_active=True,
-                type__is_active=True,
+                Q(
+                    company_id=self.active_company_id,
+                    is_active=True,
+                    type__is_active=True,
+                )
+                | Q(pk=current_model_id, company_id=self.active_company_id)
             )
             .select_related("type")
+            .distinct()
             .order_by("type__name", "name")
         )
         return form
@@ -123,10 +144,29 @@ class TransportUnitUpdateView(UpdateView):
         context = super().get_context_data(**kwargs)
         context["active_company_id"] = self.active_company_id
         context["is_edit"] = True
+        context["form_title"] = "Edit Transport Unit"
+        context["delete_url"] = reverse_lazy(
+            "transport:unit_delete", kwargs={"pk": self.object.pk}
+        )
         return context
 
 
-class TransportUnitTypeListView(ListView):
+class TransportUnitDeleteView(ActiveCompanyMixin, View):
+    success_url = reverse_lazy("transport:unit_list")
+
+    def post(self, request, *args, **kwargs):
+        obj = TransportUnit.objects.filter(
+            pk=kwargs["pk"],
+            company_id=self.active_company_id,
+        ).first()
+        if not obj:
+            raise Http404("Transport unit not found.")
+        obj.is_active = False
+        obj.save(update_fields=["is_active", "updated_at"])
+        return HttpResponseRedirect(self.success_url)
+
+
+class TransportUnitTypeListView(ActiveOnlyToggleListMixin, ListView):
     model = TransportUnitType
     template_name = "transport/type_list.html"
     context_object_name = "types"
@@ -138,29 +178,19 @@ class TransportUnitTypeListView(ListView):
 
         if active_company_id:
             queryset = queryset.filter(company_id=active_company_id)
+            if not self.is_show_all():
+                queryset = queryset.filter(is_active=True)
         else:
             queryset = queryset.none()
 
         return queryset
 
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context["active_company_id"] = self.request.session.get("active_company_id")
-        return context
 
-
-class TransportUnitTypeCreateView(CreateView):
-    active_company_id: int | None = None
+class TransportUnitTypeCreateView(ActiveCompanyMixin, CreateView):
     model = TransportUnitType
     template_name = "transport/type_form.html"
     fields = ["code", "name", "description", "is_active"]
     success_url = reverse_lazy("transport:type_list")
-
-    def dispatch(self, request, *args, **kwargs):
-        self.active_company_id = request.session.get("active_company_id")
-        if not self.active_company_id:
-            raise Http404("Active company is not selected.")
-        return super().dispatch(request, *args, **kwargs)
 
     def form_valid(self, form):
         form.instance.company_id = self.active_company_id
@@ -169,21 +199,16 @@ class TransportUnitTypeCreateView(CreateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["active_company_id"] = self.active_company_id
+        context["is_edit"] = False
+        context["form_title"] = "Create Transport Unit Type"
         return context
 
 
-class TransportUnitTypeUpdateView(UpdateView):
-    active_company_id: int | None = None
+class TransportUnitTypeUpdateView(ActiveCompanyMixin, UpdateView):
     model = TransportUnitType
     template_name = "transport/type_form.html"
     fields = ["code", "name", "description", "is_active"]
     success_url = reverse_lazy("transport:type_list")
-
-    def dispatch(self, request, *args, **kwargs):
-        self.active_company_id = request.session.get("active_company_id")
-        if not self.active_company_id:
-            raise Http404("Active company is not selected.")
-        return super().dispatch(request, *args, **kwargs)
 
     def get_queryset(self):
         return TransportUnitType.objects.filter(company_id=self.active_company_id)
@@ -196,10 +221,29 @@ class TransportUnitTypeUpdateView(UpdateView):
         context = super().get_context_data(**kwargs)
         context["active_company_id"] = self.active_company_id
         context["is_edit"] = True
+        context["form_title"] = "Edit Transport Unit Type"
+        context["delete_url"] = reverse_lazy(
+            "transport:type_delete", kwargs={"pk": self.object.pk}
+        )
         return context
 
 
-class TransportUnitModelListView(ListView):
+class TransportUnitTypeDeleteView(ActiveCompanyMixin, View):
+    success_url = reverse_lazy("transport:type_list")
+
+    def post(self, request, *args, **kwargs):
+        obj = TransportUnitType.objects.filter(
+            pk=kwargs["pk"],
+            company_id=self.active_company_id,
+        ).first()
+        if not obj:
+            raise Http404("Transport unit type not found.")
+        obj.is_active = False
+        obj.save(update_fields=["is_active"])
+        return HttpResponseRedirect(self.success_url)
+
+
+class TransportUnitModelListView(ActiveOnlyToggleListMixin, ListView):
     model = TransportUnitModel
     template_name = "transport/model_list.html"
     context_object_name = "models"
@@ -215,29 +259,19 @@ class TransportUnitModelListView(ListView):
 
         if active_company_id:
             queryset = queryset.filter(company_id=active_company_id)
+            if not self.is_show_all():
+                queryset = queryset.filter(is_active=True)
         else:
             queryset = queryset.none()
 
         return queryset
 
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context["active_company_id"] = self.request.session.get("active_company_id")
-        return context
 
-
-class TransportUnitModelCreateView(CreateView):
-    active_company_id: int | None = None
+class TransportUnitModelCreateView(ActiveCompanyMixin, CreateView):
     model = TransportUnitModel
     template_name = "transport/model_form.html"
     fields = ["type", "name", "code", "description", "is_active"]
     success_url = reverse_lazy("transport:model_list")
-
-    def dispatch(self, request, *args, **kwargs):
-        self.active_company_id = request.session.get("active_company_id")
-        if not self.active_company_id:
-            raise Http404("Active company is not selected.")
-        return super().dispatch(request, *args, **kwargs)
 
     def get_form(self, form_class=None):
         form = super().get_form(form_class)
@@ -256,21 +290,16 @@ class TransportUnitModelCreateView(CreateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["active_company_id"] = self.active_company_id
+        context["is_edit"] = False
+        context["form_title"] = "Create Transport Unit Model"
         return context
 
 
-class TransportUnitModelUpdateView(UpdateView):
-    active_company_id: int | None = None
+class TransportUnitModelUpdateView(ActiveCompanyMixin, UpdateView):
     model = TransportUnitModel
     template_name = "transport/model_form.html"
     fields = ["type", "name", "code", "description", "is_active"]
     success_url = reverse_lazy("transport:model_list")
-
-    def dispatch(self, request, *args, **kwargs):
-        self.active_company_id = request.session.get("active_company_id")
-        if not self.active_company_id:
-            raise Http404("Active company is not selected.")
-        return super().dispatch(request, *args, **kwargs)
 
     def get_queryset(self):
         return TransportUnitModel.objects.filter(
@@ -281,10 +310,16 @@ class TransportUnitModelUpdateView(UpdateView):
         form = super().get_form(form_class)
         field = form.fields["type"]
         assert isinstance(field, forms.ModelChoiceField)
-        field.queryset = TransportUnitType.objects.filter(
-            company_id=self.active_company_id,
-            is_active=True,
-        ).order_by("name")
+        current_type_id = self.object.type_id
+
+        field.queryset = (
+            TransportUnitType.objects.filter(
+                Q(company_id=self.active_company_id, is_active=True)
+                | Q(pk=current_type_id, company_id=self.active_company_id)
+            )
+            .distinct()
+            .order_by("name")
+        )
         return form
 
     def form_valid(self, form):
@@ -295,4 +330,23 @@ class TransportUnitModelUpdateView(UpdateView):
         context = super().get_context_data(**kwargs)
         context["active_company_id"] = self.active_company_id
         context["is_edit"] = True
+        context["form_title"] = "Edit Transport Unit Model"
+        context["delete_url"] = reverse_lazy(
+            "transport:model_delete", kwargs={"pk": self.object.pk}
+        )
         return context
+
+
+class TransportUnitModelDeleteView(ActiveCompanyMixin, View):
+    success_url = reverse_lazy("transport:model_list")
+
+    def post(self, request, *args, **kwargs):
+        obj = TransportUnitModel.objects.filter(
+            pk=kwargs["pk"],
+            company_id=self.active_company_id,
+        ).first()
+        if not obj:
+            raise Http404("Transport unit model not found.")
+        obj.is_active = False
+        obj.save(update_fields=["is_active"])
+        return HttpResponseRedirect(self.success_url)

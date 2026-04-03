@@ -13,7 +13,13 @@
       </a>
     </div>
 
-    <div>
+    <div class="d-flex gap-2">
+      {% if show_all %}
+        <a class="btn btn-outline-secondary" href="{{ show_active_url }}">Show active</a>
+      {% else %}
+        <a class="btn btn-outline-secondary" href="{{ show_all_url }}">Show all</a>
+      {% endif %}
+
       <a class="btn btn-primary" href="{% url 'transport:unit_create' %}">
         + Create
       </a>
