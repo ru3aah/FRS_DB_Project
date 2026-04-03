@@ -1,3 +1,4 @@
+from django import forms
 from django.http import Http404
 from django.urls import reverse_lazy
 from django.views.generic import (
@@ -42,6 +43,7 @@ class TransportUnitListView(ListView):
 
 
 class TransportUnitCreateView(CreateView):
+    active_company_id: int | None = None
     model = TransportUnit
     template_name = "transport/unit_form.html"
     fields = ["name", "type", "identifier", "description", "is_active"]
@@ -52,6 +54,13 @@ class TransportUnitCreateView(CreateView):
         if not self.active_company_id:
             raise Http404("Active company is not selected.")
         return super().dispatch(request, *args, **kwargs)
+
+    def get_form(self, form_class=None):
+        form = super().get_form(form_class)
+        field = form.fields["type"]
+        assert isinstance(field, forms.ModelChoiceField)
+        field.queryset = TransportUnitType.objects.filter(is_active=True)
+        return form
 
     def form_valid(self, form):
         company = Company.objects.get(pk=self.active_company_id)
@@ -71,9 +80,9 @@ class TransportUnitTypeListView(ListView):
     queryset = TransportUnitType.objects.all().order_by("name")
 
 
-class TransportUnitTypeCreateView(TemplateView):
+class TransportUnitTypeCreateView(CreateView):
     model = TransportUnitType
     template_name = "transport/type_form.html"
     fields = ["code", "name", "description", "is_active"]
     extra_context = {"active_company_id": None}
-    success_url = reverse_lazy("transport:type-list")
+    success_url = reverse_lazy("transport:type_list")
