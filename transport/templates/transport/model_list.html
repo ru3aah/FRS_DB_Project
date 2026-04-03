@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}FRS DB | Transport Types{% endblock %}
+{% block title %}FRS DB | Transport Models{% endblock %}
 
 {% block content %}
 {% include "includes/navbar.html" %}
@@ -14,18 +14,25 @@
     </div>
 
     <div>
-      <a class="btn btn-primary" href="{% url 'transport:type_create' %}">
+      <a class="btn btn-primary" href="{% url 'transport:model_create' %}">
         + Create
       </a>
     </div>
   </div>
 
-  <h2 class="mb-3">Transport Unit Types</h2>
+  <h2 class="mb-3">Transport Unit Models</h2>
+
+  {% if not active_company_id %}
+    <div class="alert alert-warning">
+      Active company is not selected.
+    </div>
+  {% endif %}
 
   <div class="table-responsive">
     <table class="table table-striped table-hover align-middle">
       <thead>
         <tr>
+          <th>Type</th>
           <th>Name</th>
           <th>Code</th>
           <th>Description</th>
@@ -33,14 +40,15 @@
         </tr>
       </thead>
       <tbody>
-        {% for type in types %}
+        {% for model in models %}
           <tr style="cursor: pointer;"
-              onclick="window.location.href='{% url 'transport:type_edit' type.pk %}'">
-            <td>{{ type.name }}</td>
-            <td>{{ type.code }}</td>
-            <td>{{ type.description|default:"—" }}</td>
+              onclick="window.location.href='{% url 'transport:model_edit' model.pk %}'">
+            <td>{{ model.type.name }}</td>
+            <td>{{ model.name }}</td>
+            <td>{{ model.code|default:"—" }}</td>
+            <td>{{ model.description|default:"—" }}</td>
             <td>
-              {% if type.is_active %}
+              {% if model.is_active %}
                 <span class="badge bg-success">Yes</span>
               {% else %}
                 <span class="badge bg-secondary">No</span>
@@ -49,8 +57,8 @@
           </tr>
         {% empty %}
           <tr>
-            <td colspan="4" class="text-center text-muted">
-              No transport unit types found
+            <td colspan="5" class="text-center text-muted">
+              No transport unit models found
             </td>
           </tr>
         {% endfor %}

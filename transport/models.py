@@ -1,3 +1,4 @@
+from django.core.exceptions import ValidationError
 from django.db import models
 
 from companies.models import Company
@@ -81,7 +82,7 @@ class TransportUnitModel(models.Model):
 
 class TransportUnit(models.Model):
     """
-    Generic transport resource unit.
+    Given transport resource unit.
     """
 
     company = models.ForeignKey(
@@ -89,25 +90,41 @@ class TransportUnit(models.Model):
         on_delete=models.CASCADE,
         related_name="transport_units",
     )
-    name = models.CharField(max_length=100)
-    type = models.ForeignKey(
-        TransportUnitType,
+    name = models.CharField(max_length=10)
+    model = models.ForeignKey(
+        TransportUnitModel,
         on_delete=models.PROTECT,
         related_name="transport_units",
     )
+
     identifier = models.CharField(
         max_length=50,
         blank=True,
-    )  # e.g. license plate or fleet number
+    )
     description = models.TextField(blank=True, null=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ["name"]
         verbose_name = "Transport unit"
         verbose_name_plural = "Transport units"
         db_table = "transport_units"
+
+    def clean(self):
+        errors = {}
+
+        if self.model_id:
+            unit_model = TransportUnitModel.objects.get(pk=self.model_id)
+
+            if self.company_id and unit_model.company_id != self.company_id:
+                errors["model"] = (
+                    "Selected transport unit model belongs to another company."
+                )
+
+        if errors:
+            raise ValidationError(errors)
 
     def __str__(self):
         return self.name

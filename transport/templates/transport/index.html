@@ -2,19 +2,20 @@
 {% block title %}FRS DB | Transport{% endblock %}
 
 {% block content %}
-    {%  include "includes/navbar.html" %}
+    {% include "includes/navbar.html" %}
 
     <div class="container mt-4">
 
-    <!-- Logo -->
+        <!-- Logo -->
         <div class="row text-center mb-4">
             <div class="col">
                 <img src="/static/img/logos/frs_logo.png"
-                 alt="FRS logo"
-                 class="img-fluid"
-                 width="180">
+                     alt="FRS logo"
+                     class="img-fluid"
+                     width="180">
             </div>
         </div>
+
         <!-- Title -->
         <div class="row text-center mb-4">
             <div class="col">
@@ -24,13 +25,24 @@
 
         <div class="row g-3">
 
-             <!-- Unit types -->
+            <!-- Unit types -->
             <div class="col-md-3">
                 <a href="{% url 'transport:type_list' %}"
                    class="card text-decoration-none h-100 shadow-sm">
                     <div class="card-body text-center">
-                        <h5 class="card-title">Unit types</h5>
+                        <h5 class="card-title">Unit Types</h5>
                         <p class="card-text text-muted">Manage unit types</p>
+                    </div>
+                </a>
+            </div>
+
+            <!-- Unit models -->
+            <div class="col-md-3">
+                <a href="{% url 'transport:model_list' %}"
+                   class="card text-decoration-none h-100 shadow-sm">
+                    <div class="card-body text-center">
+                        <h5 class="card-title">Unit Models</h5>
+                        <p class="card-text text-muted">Manage unit models</p>
                     </div>
                 </a>
             </div>
@@ -40,7 +52,7 @@
                 <a href="{% url 'transport:unit_list' %}"
                    class="card text-decoration-none h-100 shadow-sm">
                     <div class="card-body text-center">
-                        <h5 class="card-title">Units</h5>
+                        <h5 class="card-title">Transport Units</h5>
                         <p class="card-text text-muted">Manage transport units</p>
                     </div>
                 </a>
