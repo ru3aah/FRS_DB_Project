@@ -2,12 +2,64 @@
 {% block title %}FRS DB | Main{% endblock %}
 
 {% block content %}
-
 {% include "includes/navbar.html" %}
 
 <div class="container mt-4">
-  <h3>Main menu</h3>
-  <!-- дальше будет наполнение -->
+
+<!-- Logo -->
+    <div class="row text-center mb-4">
+        <div class="col">
+            <img src="/static/img/logos/frs_logo.png"
+                 alt="FRS logo"
+                 class="img-fluid"
+                 width="180">
+        </div>
+    </div>
+
+    <!-- Title -->
+    <div class="row text-center mb-4">
+        <div class="col">
+            <h1>Main menu</h1>
+        </div>
+    </div>
+    <div class="row g-3">
+
+        <!-- Persoms -->
+        <div class="col-md-3">
+            <a href="{% url 'persons:index' %}"
+               class="card text-decoration-none h-100 shadow-sm">
+                <div class="card-body text-center">
+                    <h5 class="card-title">Persons</h5>
+                    <p class="card-text text-muted">Manage personal data</p>
+                </div>
+            </a>
+        </div>
+
+        <!-- Staff -->
+        <div class="col-md-3">
+            <a href="{% url 'staff:index' %}"
+               class="card text-decoration-none h-100 shadow-sm">
+                <div class="card-body text-center">
+                    <h5 class="card-title">Staff</h5>
+                    <p class="card-text text-muted">Employ & Manage staff</p>
+                </div>
+            </a>
+        </div>
+
+        <!-- Transport -->
+        <div class="col-md-3">
+            <a href="{% url 'transport:index' %}"
+               class="card text-decoration-none h-100 shadow-sm">
+                <div class="card-body text-center">
+                    <h5 class="card-title">Transport</h5>
+                    <p class="card-text text-muted">Manage transport</p>
+                </div>
+            </a>
+        </div>
+
+    </div>
+
+
 </div>
 
 {% endblock %}
