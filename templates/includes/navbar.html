@@ -8,8 +8,8 @@
       <img
         src="{% static 'img/logos/frs_logo.jpg' %}"
         alt="FRS logo"
-        width="32"
-        height="32"
+        width="48"
+        height="48"
         class="rounded-1"
         style="object-fit: cover;"
       >
@@ -33,12 +33,6 @@
               <a class="nav-link"
                  aria-current="page"
                  href="{% url 'admin:index' %}">Admin</a>
-          </li>
-
-          <li class="nav-item">
-              <a class="nav-link border rounded px-3"
-                 aria-current="page"
-                 href="{% url 'main' %}">Main</a>
           </li>
 
           <li class="nav-item dropdown">
@@ -247,9 +241,9 @@
                     <img
                             src="{{ company.logo.url }}"
                             alt="Company logo"
-                            width="32"
-                            height="32"
-                            class="rounded-circle"
+                            width="48"
+                            height="48"
+                            class="rounded-4"
                             style="object-fit: cover;"
                     >
                 {% endif %}
