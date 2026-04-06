@@ -1,12 +1,35 @@
 from django import forms
 from django.db.models import Q
+from django.forms import inlineformset_factory
 from django.http import Http404, HttpResponseRedirect
 from django.urls import reverse_lazy
 from django.views import View
 from django.views.generic import CreateView, ListView, TemplateView, UpdateView
 
 from companies.models import Company
-from transport.models import TransportUnit, TransportUnitModel, TransportUnitType
+from transport.models import (
+    TransportModelTechnicalParameter,
+    TransportTechnicalParameter,
+    TransportUnit,
+    TransportUnitModel,
+    TransportUnitType,
+)
+
+TransportModelTechnicalParameterFormSet = inlineformset_factory(
+    TransportUnitModel,
+    TransportModelTechnicalParameter,
+    fields=(
+        "parameter",
+        "display_order",
+        "is_required",
+        "value_integer",
+        "value_decimal",
+        "value_text",
+        "value_boolean",
+    ),
+    extra=1,
+    can_delete=True,
+)
 
 
 class TransportHomeView(TemplateView):
@@ -73,7 +96,14 @@ class TransportUnitListView(ActiveOnlyToggleListMixin, ListView):
 class TransportUnitCreateView(ActiveCompanyMixin, CreateView):
     model = TransportUnit
     template_name = "transport/unit_form.html"
-    fields = ["name", "model", "identifier", "description", "is_active"]
+    fields = [
+        "name",
+        "model",
+        "identifier",
+        "technical_status",
+        "description",
+        "is_active",
+    ]
     success_url = reverse_lazy("transport:unit_list")
 
     def get_form(self, form_class=None):
@@ -107,7 +137,14 @@ class TransportUnitCreateView(ActiveCompanyMixin, CreateView):
 class TransportUnitUpdateView(ActiveCompanyMixin, UpdateView):
     model = TransportUnit
     template_name = "transport/unit_form.html"
-    fields = ["name", "model", "identifier", "description", "is_active"]
+    fields = [
+        "name",
+        "model",
+        "identifier",
+        "technical_status",
+        "description",
+        "is_active",
+    ]
     success_url = reverse_lazy("transport:unit_list")
 
     def get_queryset(self):
@@ -283,15 +320,55 @@ class TransportUnitModelCreateView(ActiveCompanyMixin, CreateView):
         ).order_by("name")
         return form
 
-    def form_valid(self, form):
+    def get_technical_formset(self, data=None):
+        formset = TransportModelTechnicalParameterFormSet(
+            data=data,
+            instance=self.object,
+            prefix="technical",
+        )
+        for form in formset.forms:
+            if "parameter" in form.fields:
+                form.fields["parameter"].queryset = (
+                    TransportTechnicalParameter.objects.filter(
+                        company_id=self.active_company_id,
+                        is_active=True,
+                    ).order_by("name")
+                )
+        return formset
+
+    def get(self, request, *args, **kwargs):
+        self.object = None
+        form = self.get_form()
+        technical_formset = self.get_technical_formset()
+        return self.render_to_response(
+            self.get_context_data(form=form, technical_formset=technical_formset)
+        )
+
+    def post(self, request, *args, **kwargs):
+        self.object = None
+        form = self.get_form()
+        technical_formset = self.get_technical_formset(data=request.POST)
+
+        if form.is_valid() and technical_formset.is_valid():
+            return self.forms_valid(form, technical_formset)
+
+        return self.render_to_response(
+            self.get_context_data(form=form, technical_formset=technical_formset)
+        )
+
+    def forms_valid(self, form, technical_formset):
         form.instance.company_id = self.active_company_id
-        return super().form_valid(form)
+        self.object = form.save()
+        technical_formset.instance = self.object
+        technical_formset.save()
+        return HttpResponseRedirect(self.get_success_url())
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["active_company_id"] = self.active_company_id
         context["is_edit"] = False
         context["form_title"] = "Create Transport Unit Model"
+        context.setdefault("technical_formset", self.get_technical_formset())
         return context
 
 
@@ -322,9 +399,51 @@ class TransportUnitModelUpdateView(ActiveCompanyMixin, UpdateView):
         )
         return form
 
-    def form_valid(self, form):
+    def get_technical_formset(self, data=None):
+        formset = TransportModelTechnicalParameterFormSet(
+            data=data,
+            instance=self.object,
+            prefix="technical",
+        )
+        for form in formset.forms:
+            if "parameter" in form.fields:
+                current_parameter_id = form.instance.parameter_id
+                form.fields["parameter"].queryset = (
+                    TransportTechnicalParameter.objects.filter(
+                        Q(company_id=self.active_company_id, is_active=True)
+                        | Q(pk=current_parameter_id, company_id=self.active_company_id)
+                    )
+                    .distinct()
+                    .order_by("name")
+                )
+        return formset
+
+    def get(self, request, *args, **kwargs):
+        self.object = self.get_object()
+        form = self.get_form()
+        technical_formset = self.get_technical_formset()
+        return self.render_to_response(
+            self.get_context_data(form=form, technical_formset=technical_formset)
+        )
+
+    def post(self, request, *args, **kwargs):
+        self.object = self.get_object()
+        form = self.get_form()
+        technical_formset = self.get_technical_formset(data=request.POST)
+
+        if form.is_valid() and technical_formset.is_valid():
+            return self.forms_valid(form, technical_formset)
+
+        return self.render_to_response(
+            self.get_context_data(form=form, technical_formset=technical_formset)
+        )
+
+    def forms_valid(self, form, technical_formset):
         form.instance.company_id = self.active_company_id
-        return super().form_valid(form)
+        self.object = form.save()
+        technical_formset.instance = self.object
+        technical_formset.save()
+        return HttpResponseRedirect(self.get_success_url())
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -334,6 +453,7 @@ class TransportUnitModelUpdateView(ActiveCompanyMixin, UpdateView):
         context["delete_url"] = reverse_lazy(
             "transport:model_delete", kwargs={"pk": self.object.pk}
         )
+        context.setdefault("technical_formset", self.get_technical_formset())
         return context
 
 
@@ -350,3 +470,7 @@ class TransportUnitModelDeleteView(ActiveCompanyMixin, View):
         obj.is_active = False
         obj.save(update_fields=["is_active"])
         return HttpResponseRedirect(self.success_url)
+
+
+class TransportUnitOperationalValueInlineDummy:
+    pass
